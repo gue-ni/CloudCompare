@@ -2464,11 +2464,13 @@ void ccGLWindow::draw3D(CC_DRAW_CONTEXT& CONTEXT, RenderingParams& renderingPara
 	//we draw 3D entities
 	if (m_globalDBRoot)
 	{
+		ccLog::PrintDebug("draw m_globalDBRoot");
 		m_globalDBRoot->draw(CONTEXT);
 	}
 
 	if (m_winDBRoot)
 	{
+		ccLog::PrintDebug("draw m_winDBRoot");
 		m_winDBRoot->draw(CONTEXT);
 	}
 
@@ -3686,7 +3688,7 @@ void ccGLWindow::setPickingMode(PICKING_MODE mode/*=DEFAULT_PICKING*/)
 
 	m_pickingMode = mode;
 
-	//ccLog::Warning(QString("[%1] Picking mode set to: ").arg(m_uniqueID) + ToString(m_pickingMode));
+	// ccLog::Warning(QString("[%1] Picking mode set to: ").arg(m_uniqueID) + ToString(m_pickingMode));
 }
 
 CCVector3d ccGLWindow::convertMousePositionToOrientation(int x, int y)
@@ -4505,6 +4507,7 @@ void ccGLWindow::mouseReleaseEvent(QMouseEvent *event)
 
 void ccGLWindow::doPicking()
 {
+	ccLog::PrintDebug("doPicking");
 	int x = m_lastMousePos.x();
 	int y = m_lastMousePos.y();
 
@@ -4674,6 +4677,8 @@ void ccGLWindow::onWheelEvent(float wheelDelta_deg)
 
 void ccGLWindow::startPicking(PickingParameters& params)
 {
+	ccLog::PrintDebug("startPicking");
+	return;
 	//correction for HD screens
 	const int retinaScale = devicePixelRatio();
 	params.centerX *= retinaScale;
@@ -4708,6 +4713,9 @@ void ccGLWindow::processPickingResult(	const PickingParameters& params,
 										const CCVector3d* nearestPointBC/*=nullptr*/,
 										const std::unordered_set<int>* selectedIDs/*=nullptr*/)
 {
+
+	ccLog::PrintDebug("processPickingResult");
+
 	//standard "entity" picking
 	if (params.mode == ENTITY_PICKING)
 	{
@@ -4778,6 +4786,9 @@ void ccGLWindow::processPickingResult(	const PickingParameters& params,
 //We need to get rid of this code or change it to color-based selection...
 void ccGLWindow::startOpenGLPicking(const PickingParameters& params)
 {
+	ccLog::PrintDebug("startOpenGLPicking");
+	return; // TODO remove
+
 	if (!params.pickInLocalDB && !params.pickInSceneDB)
 	{
 		assert(false);
@@ -5023,6 +5034,7 @@ void ccGLWindow::startOpenGLPicking(const PickingParameters& params)
 void ccGLWindow::startCPUBasedPointPicking(const PickingParameters& params)
 {
 	//qint64 t0 = m_timer.elapsed();
+	ccLog::PrintDebug("startCPUBasedPointPicking");
 
 	CCVector2d clickedPos(params.centerX, m_glViewport.height() - 1 - params.centerY);
 
