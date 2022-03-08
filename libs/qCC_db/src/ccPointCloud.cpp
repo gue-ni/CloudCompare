@@ -2201,6 +2201,41 @@ inline float GetSymmetricalNormalizedValue(const ScalarType& sfVal, const ccScal
 //the GL type depends on the PointCoordinateType 'size' (float or double)
 static GLenum GL_COORD_TYPE = sizeof(PointCoordinateType) == 4 ? GL_FLOAT : GL_DOUBLE;
 
+void ccPointCloud::glChunkVertexPointer2(const CC_DRAW_CONTEXT& context, size_t chunkIndex, unsigned decimStep, bool useVBOs)
+{
+	QOpenGLFunctions_4_3_Core* glFunc = context.glFunctions<QOpenGLFunctions_4_3_Core>();
+	assert(glFunc != nullptr);
+	if (useVBOs
+		&&	m_vboManager.state == vboSet::INITIALIZED
+		&&	m_vboManager.vbos.size() > static_cast<size_t>(chunkIndex)
+		&& m_vboManager.vbos[chunkIndex]
+		&& m_vboManager.vbos[chunkIndex]->isCreated())
+	{
+		//we can use VBOs directly
+		if (m_vboManager.vbos[chunkIndex]->bind())
+		{
+			//glFunc->glVertexPointer(3, GL_COORD_TYPE, decimStep * 3 * sizeof(PointCoordinateType), nullptr);
+			m_vboManager.vbos[chunkIndex]->allocate(nullptr, decimStep * 3 * sizeof(PointCoordinateType));
+			m_vboManager.vbos[chunkIndex]->release();
+		}
+		else
+		{
+			ccLog::Warning("[VBO] Failed to bind VBO?! We'll deactivate them then...");
+			m_vboManager.state = vboSet::FAILED;
+			//recall the method
+			glChunkVertexPointer(context, chunkIndex, decimStep, false);
+		}
+	}
+	else
+	{
+		//standard OpenGL copy
+		//glFunc->glVertexPointer(3, GL_COORD_TYPE, decimStep * 3 * sizeof(PointCoordinateType), ccChunk::Start(m_points, chunkIndex));
+		m_vboManager.vbos[chunkIndex]->allocate(ccChunk::Start(m_points, chunkIndex), decimStep * 3 * sizeof(PointCoordinateType));
+
+	}
+
+}
+
 void ccPointCloud::glChunkVertexPointer(const CC_DRAW_CONTEXT& context, size_t chunkIndex, unsigned decimStep, bool useVBOs)
 {
 	QOpenGLFunctions_2_1* glFunc = context.glFunctions<QOpenGLFunctions_2_1>();
@@ -2543,7 +2578,6 @@ void ccPointCloud::drawMeOnly_old(CC_DRAW_CONTEXT& context)
 		return;
 
 	//get the set of OpenGL functions (version 2.1)
-	//QOpenGLFunctions_4_3_Core* glFunc = context.glFunctions<QOpenGLFunctions_4_3_Core>();
 	QOpenGLFunctions_2_1* glFunc = context.glFunctions<QOpenGLFunctions_2_1>();
 	assert(glFunc != nullptr);
 
@@ -2730,6 +2764,10 @@ void ccPointCloud::drawMeOnly_old(CC_DRAW_CONTEXT& context)
 			glFunc->glPointSize(static_cast<GLfloat>(m_pointSize));
 		}
 
+		// TODO remove
+		glParams.showNorms = false;
+		glParams.showColors = false;
+
 		// simplified display prodcedure 
 		{
 			bool useVBOs = context.useVBOs && !toDisplay.indexMap ? updateVBOs(context, glParams) : false; //VBOs are not compatible with LoD
@@ -2783,11 +2821,13 @@ void ccPointCloud::drawMeOnly_old(CC_DRAW_CONTEXT& context)
 		}
 
 		glFunc->glPopAttrib(); //GL_LIGHTING_BIT | GL_COLOR_BUFFER_BIT | GL_TRANSFORM_BIT | GL_POINT_BIT --> will switch the light off
-
+		
+		/*
 		if (pushName)
 		{
 			glFunc->glPopName();
 		}
+		*/
 	}
 	else if (MACRO_Draw2D(context))
 	{
@@ -2812,15 +2852,245 @@ void ccPointCloud::drawMeOnly_new(CC_DRAW_CONTEXT& context)
 
 	if (MACRO_Draw3D(context))
 	{
+		glDrawParams glParams;
+		getDrawingParameters(glParams);
+		//no normals shading without light!
+		if (!MACRO_LightIsEnabled(context))
+		{
+			glParams.showNorms = false;
+		}
+
+		//can't display a SF without... a SF... and an active color scale!
+		assert(!glParams.showSF || hasDisplayedScalarField());
+
+
+		// L.O.D. display
+		DisplayDesc toDisplay(0, size());
+
+		if (	context.decimateCloudOnMove
+			&&	toDisplay.count > context.minLODPointCount
+			&&	MACRO_LODActivated(context)
+			)
+		{
+			bool skipLoD = false;
+
+			//is there a LoD structure associated yet?
+			if (!m_lod || !m_lod->isBroken())
+			{
+				if (!m_lod || m_lod->isNull())
+				{
+					//auto-init LoD structure
+					//DGM: can't spawn a progress dialog here as the process will be async
+					//ccProgressDialog pDlg(false, context.display ? context.display->asWidget() : 0);
+					initLOD(/*&pDlg*/);
+				}
+				else
+				{
+					assert(m_lod);
+
+					unsigned char maxLevel = m_lod->maxLevel();
+					bool underConstruction = m_lod->isUnderConstruction();
+
+					//if the cloud has less LOD levels than the minimum to display
+					if (underConstruction || maxLevel == 0)
+					{
+						//not yet ready
+						context.moreLODPointsAvailable = underConstruction;
+						context.higherLODLevelsAvailable = false;
+					}
+					else if (context.stereoPassIndex == 0)
+					{
+						if (context.currentLODLevel == 0)
+						{
+							//get the current viewport and OpenGL matrices
+							ccGLCameraParameters camera;
+							context.display->getGLCameraParameters(camera);
+							//replace the viewport and matrices by the real ones
+							//glFunc->glGetIntegerv(GL_VIEWPORT, camera.viewport);
+							//glFunc->glGetDoublev(GL_PROJECTION_MATRIX, camera.projectionMat.data());
+							//glFunc->glGetDoublev(GL_MODELVIEW_MATRIX, camera.modelViewMat.data());
+							//camera frustum
+							Frustum frustum(camera.modelViewMat, camera.projectionMat);
+
+							//first time: we flag the cells visibility and count the number of visible points
+							m_lod->flagVisibility(frustum, m_clipPlanes.empty() ? nullptr : &m_clipPlanes);
+						}
+
+						unsigned remainingPointsAtThisLevel = 0;
+						toDisplay.startIndex = 0;
+						toDisplay.count = MAX_POINT_COUNT_PER_LOD_RENDER_PASS;
+						toDisplay.indexMap = &m_lod->getIndexMap(context.currentLODLevel, toDisplay.count, remainingPointsAtThisLevel);
+						if (toDisplay.count == 0)
+						{
+							//nothing to draw at this level
+							toDisplay.indexMap = nullptr;
+						}
+						else
+						{
+							assert(toDisplay.count == toDisplay.indexMap->size());
+							toDisplay.endIndex = toDisplay.startIndex + toDisplay.count;
+						}
+
+						//could we draw more points at the next level?
+						context.moreLODPointsAvailable = (remainingPointsAtThisLevel != 0);
+						context.higherLODLevelsAvailable = (!m_lod->allDisplayed() && context.currentLODLevel + 1 <= maxLevel);
+					}
+				}
+			}
+
+			if (!toDisplay.indexMap && !skipLoD)
+			{
+				//if we don't have a LoD map, we can only display points at level 0!
+				if (context.currentLODLevel != 0)
+				{
+					return;
+				}
+
+				//we wait for the LOD to be ready
+				//meanwhile we will display less points
+				if (context.minLODPointCount && toDisplay.count > context.minLODPointCount)
+				{
+					GLint maxStride = 2048;
+					//maxStride == decimStep * 3 * sizeof(PointCoordinateType)
+					toDisplay.decimStep = static_cast<int>(ceil(static_cast<float>(toDisplay.count) / context.minLODPointCount));
+					toDisplay.decimStep = std::min<unsigned>(toDisplay.decimStep, maxStride / (3 * sizeof(PointCoordinateType)));
+				}
+			}
+		}
+
+		//custom point size?
+		if (m_pointSize != 0)
+		{
+			glFunc->glPointSize(static_cast<GLfloat>(m_pointSize));
+		}
+
+		// TODO remove
+		glParams.showNorms = false;
+		glParams.showColors = false;
+
+		// simplified display prodcedure 
+		{
+			bool useVBOs = context.useVBOs && !toDisplay.indexMap ? updateVBOs2(context, glParams) : false; //VBOs are not compatible with LoD
+
+			ccLog::PrintDebug(QString("draw simplified %1, %2").arg(useVBOs).arg(context.useVBOs));
+
+			size_t chunkCount = ccChunk::Count(m_points);
+
+			//glFunc->glEnableClientState(GL_VERTEX_ARRAY);
+			
+			//if (glParams.showNorms)
+			//		glFunc->glEnableClientState(GL_NORMAL_ARRAY);
+		
+			//if (glParams.showColors)
+			//	glFunc->glEnableClientState(GL_COLOR_ARRAY);
+
+			if (context.customRenderingShader) {
+				ccLog::PrintDebug("Bind shader");
+
+				ccShader* shader = context.customRenderingShader;
+
+				ccGLCameraParameters camera;
+				context.display->getGLCameraParameters(camera);
+
+				shader->bind();
+
+				shader->enableAttributeArray("aPos");
+				shader->setAttributeBuffer("aPos", GL_FLOAT, 0, 3, 3 * sizeof(PointCoordinateType));
+
+				int modelViewMat = shader->uniformLocation("mv");
+				int projectionMat = shader->uniformLocation("p");
+
+
+				double* doubles1 = camera.modelViewMat.data();
+				double* doubles2 = camera.projectionMat.data();
+
+				float floats1[16];
+				float floats2[16];
+				for (int i = 0; i < 16; i++) {
+					floats1[i] = doubles1[i];
+					floats2[i] = doubles2[i];
+				}
+				
+				QMatrix4x4 mat1(floats1);
+				QMatrix4x4 mat2(floats2);
+
+				shader->setUniformValue(modelViewMat, mat1);
+				shader->setUniformValue(projectionMat, mat2);
+				
+				
+				//camera.modelViewMat, camera.projectionMat
+
+
+			}
+			else {
+				ccLog::PrintDebug("No custom shader");
+			}
+
+			
+			for (size_t k = 0; k < chunkCount; ++k)
+			{
+				size_t chunkSize = ccChunk::Size(k, m_points);
+
+				//ccLog::PrintDebug("chunkSize");
+
+				//points
+				glChunkVertexPointer2(context, k, toDisplay.decimStep, useVBOs);
+				/*
+				//normals
+				if (glParams.showNorms)
+					glChunkNormalPointer(context, k, toDisplay.decimStep, useVBOs);
+				//colors
+				if (glParams.showColors)
+					glChunkColorPointer(context, k, toDisplay.decimStep, useVBOs);
+				*/
+
+				if (toDisplay.decimStep > 1)
+				{
+					chunkSize = static_cast<unsigned>(floor(static_cast<float>(chunkSize) / toDisplay.decimStep));
+				}
+				glFunc->glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(chunkSize));
+			}
+
+			/*
+			glFunc->glDisableClientState(GL_VERTEX_ARRAY);
+			if (glParams.showNorms)
+				glFunc->glDisableClientState(GL_NORMAL_ARRAY);
+			if (glParams.showColors)
+				glFunc->glDisableClientState(GL_COLOR_ARRAY);
+			*/
+
+		}
+
+
+		/*** END DISPLAY ***/
+
+		/*
+		if (context.drawRoundedPoints)
+		{
+			glFunc->glPopAttrib(); //GL_POINT_BIT
+		}
+
+		glFunc->glPopAttrib(); //GL_LIGHTING_BIT | GL_COLOR_BUFFER_BIT | GL_TRANSFORM_BIT | GL_POINT_BIT --> will switch the light off
+		*/
+		
+		/*
+		if (pushName)
+		{
+			glFunc->glPopName();
+		}
+		*/
+
+
+
+
 	}
-	else {
-		assert(false);
+	else if (MACRO_Draw2D(context)) {
 	}
 }
 
 void ccPointCloud::drawMeOnly(CC_DRAW_CONTEXT& context)
 {
-	drawMeOnly_old(context);
+	drawMeOnly_new(context);
 }
 
 void ccPointCloud::addColorRampInfo(CC_DRAW_CONTEXT& context)
@@ -4409,6 +4679,269 @@ static bool CatchGLErrors(GLenum err, const char* context)
 //DGM: normals are so slow to display that it's a waste of memory and time to load them in VBOs!
 #define DONT_LOAD_NORMALS_IN_VBOS
 
+bool ccPointCloud::updateVBOs2(const CC_DRAW_CONTEXT& context, const glDrawParams& glParams)
+{
+
+	ccLog::PrintDebug("updateVBOs2");
+
+	if (isColorOverridden())
+	{
+		//nothing to do (we don't display true colors, SF or normals!)
+		return false;
+	}
+
+	if (m_vboManager.state == vboSet::FAILED)
+	{
+		//ccLog::Warning(QString("[ccPointCloud::updateVBOs] VBOs are in a 'failed' state... we won't try to update them! (cloud '%1')").arg(getName()));
+		return false;
+	}
+
+	if (!m_currentDisplay)
+	{
+		ccLog::Warning(QString("[ccPointCloud::updateVBOs] Need an associated GL context! (cloud '%1')").arg(getName()));
+		assert(false);
+		return false;
+	}
+
+	if (m_vboManager.state == vboSet::INITIALIZED)
+	{
+		//let's check if something has changed
+		if ( glParams.showColors && ( !m_vboManager.hasColors || m_vboManager.colorIsSF ) )
+		{
+			m_vboManager.updateFlags |= vboSet::UPDATE_COLORS;
+		}
+		
+		if (	glParams.showSF
+		&& (		!m_vboManager.hasColors
+				||	!m_vboManager.colorIsSF
+				||	 m_vboManager.sourceSF != m_currentDisplayedScalarField
+				||	 m_currentDisplayedScalarField->getModificationFlag() == true ) )
+		{
+			m_vboManager.updateFlags |= vboSet::UPDATE_COLORS;
+		}
+
+#ifndef DONT_LOAD_NORMALS_IN_VBOS
+		if ( glParams.showNorms && !m_vboManager.hasNormals )
+		{
+			updateFlags |= UPDATE_NORMALS;
+		}
+#endif
+		//nothing to do?
+		if (m_vboManager.updateFlags == 0)
+		{
+			return true;
+		}
+	}
+	else
+	{
+		m_vboManager.updateFlags = vboSet::UPDATE_ALL;
+	}
+
+
+	size_t chunksCount = ccChunk::Count(m_points);
+	//allocate per-chunk descriptors if necessary
+	if (m_vboManager.vbos.size() != chunksCount)
+	{
+		//properly remove the elements that are not needed anymore!
+		for (size_t i = chunksCount; i < m_vboManager.vbos.size(); ++i)
+		{
+			if (m_vboManager.vbos[i])
+			{
+				m_vboManager.vbos[i]->destroy();
+				delete m_vboManager.vbos[i];
+				m_vboManager.vbos[i] = nullptr;
+			}
+		}
+
+		//resize the container
+		try
+		{
+			m_vboManager.vbos.resize(chunksCount, nullptr);
+		}
+		catch (const std::bad_alloc&)
+		{
+			ccLog::Warning(QString("[ccPointCloud::updateVBOs] Not enough memory! (cloud '%1')").arg(getName()));
+			m_vboManager.state = vboSet::FAILED;
+			return false;
+		}
+	}
+
+	//init VBOs
+	unsigned pointsInVBOs = 0;
+	size_t totalSizeBytesBefore = m_vboManager.totalMemSizeBytes;
+	m_vboManager.totalMemSizeBytes = 0;
+	{
+		//DGM: the context should be already active as this method should only be called from 'drawMeOnly'
+		assert(!glParams.showSF		|| m_currentDisplayedScalarField);
+		assert(!glParams.showColors	|| m_rgbaColors);
+#ifndef DONT_LOAD_NORMALS_IN_VBOS
+		assert(!glParams.showNorms	|| (m_normals && m_normals->chunksCount() >= chunksCount));
+#endif
+
+		m_vboManager.hasColors  = glParams.showSF || glParams.showColors;
+		m_vboManager.colorIsSF  = glParams.showSF;
+		m_vboManager.sourceSF   = glParams.showSF ? m_currentDisplayedScalarField : nullptr;
+#ifndef DONT_LOAD_NORMALS_IN_VBOS
+		m_vboManager.hasNormals = glParams.showNorms;
+#else
+		m_vboManager.hasNormals  = false;
+#endif
+
+		//process each chunk
+		for (size_t chunkIndex = 0; chunkIndex < chunksCount; ++chunkIndex)
+		{
+			int chunkSize = static_cast<int>(ccChunk::Size(chunkIndex, m_points));
+
+			int chunkUpdateFlags = m_vboManager.updateFlags;
+			bool reallocated = false;
+			if (!m_vboManager.vbos[chunkIndex])
+			{
+				m_vboManager.vbos[chunkIndex] = new VBO;
+			}
+
+			//allocate memory for current VBO
+			int vboSizeBytes = m_vboManager.vbos[chunkIndex]->init(chunkSize, m_vboManager.hasColors, m_vboManager.hasNormals, &reallocated);
+
+			QOpenGLFunctions_4_3_Core* glFunc = context.glFunctions<QOpenGLFunctions_4_3_Core>(); 
+			if (glFunc)
+			{
+				CatchGLErrors(glFunc->glGetError(), "ccPointCloud::vbo.init");
+			}
+
+			if (vboSizeBytes > 0)
+			{
+				//ccLog::Print(QString("[VBO] VBO #%1 initialized (ID=%2)").arg(chunkIndex).arg(m_vboManager.vbos[chunkIndex]->bufferId()));
+
+				if (reallocated)
+				{
+					//if the vbo is reallocated, then all its content has been cleared!
+					chunkUpdateFlags = vboSet::UPDATE_ALL;
+				}
+
+				m_vboManager.vbos[chunkIndex]->bind();
+
+				//load points
+				if (chunkUpdateFlags & vboSet::UPDATE_POINTS)
+				{
+					m_vboManager.vbos[chunkIndex]->write(0, ccChunk::Start(m_points, chunkIndex), sizeof(PointCoordinateType)*chunkSize * 3);
+				}
+				//load colors
+				if (chunkUpdateFlags & vboSet::UPDATE_COLORS)
+				{
+					if (glParams.showSF)
+					{
+						//copy SF colors in static array
+						{
+							assert(m_vboManager.sourceSF);
+							ColorCompType* _sfColors = s_rgbBuffer4ub;
+							ScalarType* _sf = ccChunk::Start(*m_vboManager.sourceSF, chunkIndex);
+							for (int j = 0; j < chunkSize; j++, _sf++)
+							{
+								//we need to convert scalar value to color into a temporary structure
+								const ccColor::Rgb* col = _sf ? m_vboManager.sourceSF->getColor(*_sf) : nullptr;
+								if (!col)
+									col = &ccColor::lightGreyRGB;
+								*_sfColors++ = col->r;
+								*_sfColors++ = col->g;
+								*_sfColors++ = col->b;
+								*_sfColors++ = ccColor::MAX;
+							}
+						}
+						//then send them in VRAM
+						m_vboManager.vbos[chunkIndex]->write(m_vboManager.vbos[chunkIndex]->rgbShift, s_rgbBuffer4ub, sizeof(ColorCompType) * chunkSize * 4);
+						//upadte 'modification' flag for current displayed SF
+						m_vboManager.sourceSF->setModificationFlag(false);
+					}
+					else if (glParams.showColors)
+					{
+						m_vboManager.vbos[chunkIndex]->write(m_vboManager.vbos[chunkIndex]->rgbShift, ccChunk::Start(*m_rgbaColors, chunkIndex), sizeof(ColorCompType) * chunkSize * 4);
+					}
+				}
+#ifndef DONT_LOAD_NORMALS_IN_VBOS
+				//load normals
+				if (glParams.showNorms && (chunkUpdateFlags & UPDATE_NORMALS))
+				{
+					//we must decode the normals first!
+					CompressedNormType* inNorms = m_normals->chunkStartPtr(chunkIndex);
+					PointCoordinateType* outNorms = s_normalBuffer;
+					for (int j=0; j<chunkSize; ++j)
+					{
+						const CCVector3& N = ccNormalVectors::GetNormal(*inNorms++);
+						*(outNorms)++ = N.x;
+						*(outNorms)++ = N.y;
+						*(outNorms)++ = N.z;
+					}
+					m_vboManager.vbos[chunkIndex]->write(m_vboManager.vbos[chunkIndex]->normalShift, s_normalBuffer, sizeof(PointCoordinateType)*chunkSize * 3);
+				}
+#endif
+				m_vboManager.vbos[chunkIndex]->release();
+
+				//if an error is detected
+				QOpenGLFunctions_4_3_Core* glFunc = context.glFunctions<QOpenGLFunctions_4_3_Core>();
+				assert(glFunc != nullptr);
+				if (CatchGLErrors(glFunc->glGetError(), "ccPointCloud::updateVBOs"))
+				{
+					vboSizeBytes = -1;
+				}
+				else
+				{
+					m_vboManager.totalMemSizeBytes += static_cast<size_t>(vboSizeBytes);
+					pointsInVBOs += chunkSize;
+				}
+			}
+
+			if (vboSizeBytes < 0) //VBO initialization failed
+			{
+				m_vboManager.vbos[chunkIndex]->destroy();
+				delete m_vboManager.vbos[chunkIndex];
+				m_vboManager.vbos[chunkIndex] = nullptr;
+
+				//we can stop here
+				if (chunkIndex == 0)
+				{
+					ccLog::Warning(QString("[ccPointCloud::updateVBOs] Failed to initialize VBOs (not enough memory?) (cloud '%1')").arg(getName()));
+					m_vboManager.state = vboSet::FAILED;
+					m_vboManager.vbos.resize(0);
+					return false;
+				}
+				else
+				{
+					//shouldn't be better for the next VBOs!
+					break;
+				}
+			}
+		}
+	}
+
+	//Display vbo(s) status
+	//{
+	//	for (unsigned chunkIndex=0; chunkIndex<chunksCount; ++chunkIndex)
+	//		ccLog::Print(QString("[VBO] VBO #%1 status: %2 (ID=%3)")
+	//			.arg(chunkIndex)
+	//			.arg(m_vboManager.vbos[chunkIndex] && m_vboManager.vbos[chunkIndex]->isCreated() ? "created" : "not created")
+	//			.arg(m_vboManager.vbos[chunkIndex] ? m_vboManager.vbos[chunkIndex]->bufferId() : -1));
+	//}
+
+	if (m_vboManager.totalMemSizeBytes != totalSizeBytesBefore)
+		ccLog::Print(QString("[VBO] VBO(s) (re)initialized for cloud '%1' (%2 Mb = %3% of points could be loaded)")
+			.arg(getName())
+			.arg(static_cast<double>(m_vboManager.totalMemSizeBytes) / (1 << 20), 0, 'f', 2)
+			.arg(static_cast<double>(pointsInVBOs) / size() * 100.0, 0, 'f', 2));
+
+	m_vboManager.state = vboSet::INITIALIZED;
+	m_vboManager.updateFlags = 0;
+
+	return true;
+
+
+
+
+
+
+
+
+}
+
 bool ccPointCloud::updateVBOs(const CC_DRAW_CONTEXT& context, const glDrawParams& glParams)
 {
 	if (isColorOverridden())
@@ -4648,13 +5181,11 @@ bool ccPointCloud::updateVBOs(const CC_DRAW_CONTEXT& context, const glDrawParams
 	//			.arg(m_vboManager.vbos[chunkIndex] ? m_vboManager.vbos[chunkIndex]->bufferId() : -1));
 	//}
 
-#ifdef _DEBUG
 	if (m_vboManager.totalMemSizeBytes != totalSizeBytesBefore)
 		ccLog::Print(QString("[VBO] VBO(s) (re)initialized for cloud '%1' (%2 Mb = %3% of points could be loaded)")
 			.arg(getName())
 			.arg(static_cast<double>(m_vboManager.totalMemSizeBytes) / (1 << 20), 0, 'f', 2)
 			.arg(static_cast<double>(pointsInVBOs) / size() * 100.0, 0, 'f', 2));
-#endif
 
 	m_vboManager.state = vboSet::INITIALIZED;
 	m_vboManager.updateFlags = 0;

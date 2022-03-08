@@ -146,6 +146,8 @@ else()
 	install_ext( FILES ${CC_FBO_LIB_SOURCE_DIR}/shaders/Bilateral/bilateral.frag ${CLOUDCOMPARE_DEST_FOLDER} /shaders/Bilateral )
 	install_ext( FILES ${CC_FBO_LIB_SOURCE_DIR}/shaders/Bilateral/bilateral.vert ${CLOUDCOMPARE_DEST_FOLDER} /shaders/Bilateral )
 	install_ext( FILES ${CMAKE_CURRENT_SOURCE_DIR}/shaders/ColorRamp/color_ramp.frag ${CLOUDCOMPARE_DEST_FOLDER} /shaders/ColorRamp )
+	install_ext( FILES ${CMAKE_CURRENT_SOURCE_DIR}/shaders/PointCloud/shader.frag ${CLOUDCOMPARE_DEST_FOLDER} /shaders/PointCloud )
+	install_ext( FILES ${CMAKE_CURRENT_SOURCE_DIR}/shaders/PointCloud/shader.vert ${CLOUDCOMPARE_DEST_FOLDER} /shaders/PointCloud )
 endif()
 
 # Install plugins and shaders in the correct folder for each platform

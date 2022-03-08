@@ -785,6 +785,7 @@ protected: // VBO
 
 	//! Init/updates VBOs
 	bool updateVBOs(const CC_DRAW_CONTEXT& context, const glDrawParams& glParams);
+	bool updateVBOs2(const CC_DRAW_CONTEXT& context, const glDrawParams& glParams);
 
 	class VBO : public QGLBuffer
 	{
@@ -845,6 +846,7 @@ protected: // VBO
 
 	//per-block data transfer to the GPU (VBO or standard mode)
 	void glChunkVertexPointer(const CC_DRAW_CONTEXT& context, size_t chunkIndex, unsigned decimStep, bool useVBOs);
+	void glChunkVertexPointer2(const CC_DRAW_CONTEXT& context, size_t chunkIndex, unsigned decimStep, bool useVBOs);
 	void glChunkColorPointer (const CC_DRAW_CONTEXT& context, size_t chunkIndex, unsigned decimStep, bool useVBOs);
 	void glChunkSFPointer    (const CC_DRAW_CONTEXT& context, size_t chunkIndex, unsigned decimStep, bool useVBOs);
 	void glChunkNormalPointer(const CC_DRAW_CONTEXT& context, size_t chunkIndex, unsigned decimStep, bool useVBOs);

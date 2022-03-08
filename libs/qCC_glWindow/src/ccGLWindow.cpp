@@ -949,6 +949,22 @@ bool ccGLWindow::initialize()
 				}
 			}
 
+			if (!m_customRenderingShader) {
+				ccLog::PrintDebug("trying to load custom Shader");
+				const QString shaderPath = QStringLiteral( "%1/PointCloud" ).arg( *s_shaderPath );
+				ccShader* shader = new ccShader();
+				QString error;
+				if (!shader->fromFile(shaderPath, "shader", error))
+				{
+					ccLog::Warning(QString("[3D View %1] Failed to load custom Rendering Shader").arg(m_uniqueID));
+				}
+				else {
+					m_customRenderingShader = shader;
+				}
+
+				// TODO?
+			}
+
 			//stereo mode
 			if (!m_silentInitialization)
 			{
@@ -983,10 +999,11 @@ bool ccGLWindow::initialize()
 		//apply (potentially) updated parameters;
 		setDisplayParameters(params, hasOverriddenDisplayParameters());
 
-#if 0
+#if 0 
 		//OpenGL 3.3+ rendering shader
 		if ( QGLFormat::openGLVersionFlags() & QGLFormat::OpenGL_Version_3_3 )
 		{
+			ccLog::PrintDebug("try to load shader");
 			bool vaEnabled = ccFBOUtils::CheckVAAvailability();
 			if (vaEnabled && !m_customRenderingShader)
 			{
@@ -2047,7 +2064,7 @@ void ccGLWindow::fullRenderingPass(CC_DRAW_CONTEXT& CONTEXT, RenderingParams& re
 
 		drawBackground(CONTEXT, renderingParams);
 	}
-
+	
 	/*********************/
 	/*** MAIN 3D LAYER ***/
 	/*********************/
@@ -2288,7 +2305,6 @@ void ccGLWindow::fullRenderingPass(CC_DRAW_CONTEXT& CONTEXT, RenderingParams& re
 	{
 		drawForeground(CONTEXT, renderingParams);
 	}
-
 	glFunc->glFlush();
 }
 
@@ -2464,13 +2480,11 @@ void ccGLWindow::draw3D(CC_DRAW_CONTEXT& CONTEXT, RenderingParams& renderingPara
 	//we draw 3D entities
 	if (m_globalDBRoot)
 	{
-		ccLog::PrintDebug("draw m_globalDBRoot");
 		m_globalDBRoot->draw(CONTEXT);
 	}
 
 	if (m_winDBRoot)
 	{
-		ccLog::PrintDebug("draw m_winDBRoot");
 		m_winDBRoot->draw(CONTEXT);
 	}
 
@@ -2485,7 +2499,7 @@ void ccGLWindow::draw3D(CC_DRAW_CONTEXT& CONTEXT, RenderingParams& renderingPara
 			renderingParams.hasAutoPivotCandidates[renderingParams.passIndex] = true;
 		}
 	}
-
+	
 	if (m_globalDBRoot && m_globalDBRoot->getChildrenNumber())
 	{
 		//draw pivot
@@ -2547,7 +2561,7 @@ void ccGLWindow::draw3D(CC_DRAW_CONTEXT& CONTEXT, RenderingParams& renderingPara
 	{
 		glDisableSunLight();
 	}
-
+	
 	//we display the cross at the end (and in orthographic mode)
 	if (renderingParams.draw3DCross
 		&&	m_currentLODState.level == 0
