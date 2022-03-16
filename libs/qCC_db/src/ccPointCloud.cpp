@@ -2223,7 +2223,7 @@ void ccPointCloud::glChunkVertexPointer2(const CC_DRAW_CONTEXT& context, size_t 
 			ccLog::Warning("[VBO] Failed to bind VBO?! We'll deactivate them then...");
 			m_vboManager.state = vboSet::FAILED;
 			//recall the method
-			glChunkVertexPointer(context, chunkIndex, decimStep, false);
+			glChunkVertexPointer2(context, chunkIndex, decimStep, false);
 		}
 	}
 	else
@@ -3018,8 +3018,6 @@ void ccPointCloud::drawMeOnly_new(CC_DRAW_CONTEXT& context)
 				shader->setUniformValue(projectionMat, mat2);
 				
 				
-				//camera.modelViewMat, camera.projectionMat
-
 
 			}
 			else {
@@ -3035,6 +3033,7 @@ void ccPointCloud::drawMeOnly_new(CC_DRAW_CONTEXT& context)
 
 				//points
 				glChunkVertexPointer2(context, k, toDisplay.decimStep, useVBOs);
+			
 				/*
 				//normals
 				if (glParams.showNorms)
@@ -3048,8 +3047,12 @@ void ccPointCloud::drawMeOnly_new(CC_DRAW_CONTEXT& context)
 				{
 					chunkSize = static_cast<unsigned>(floor(static_cast<float>(chunkSize) / toDisplay.decimStep));
 				}
+				ccLog::PrintDebug("glDrawArrays");
 				glFunc->glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(chunkSize));
 			}
+
+			glFunc->glUseProgram(0);
+
 
 			/*
 			glFunc->glDisableClientState(GL_VERTEX_ARRAY);
