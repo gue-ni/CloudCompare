@@ -4801,7 +4801,6 @@ void ccGLWindow::processPickingResult(	const PickingParameters& params,
 void ccGLWindow::startOpenGLPicking(const PickingParameters& params)
 {
 	ccLog::PrintDebug("startOpenGLPicking");
-	return; // TODO remove
 
 	if (!params.pickInLocalDB && !params.pickInSceneDB)
 	{
@@ -5789,6 +5788,8 @@ void ccGLWindow::setGLCameraAspectRatio(float ar)
 		ccLog::Warning("[ccGLWindow::setGLCameraAspectRatio] Invalid AR value!");
 		return;
 	}
+
+	ccLog::PrintDebug(QString("set camera aspect ratio %1").arg(ar));
 
 	if (m_viewportParams.cameraAspectRatio != ar)
 	{

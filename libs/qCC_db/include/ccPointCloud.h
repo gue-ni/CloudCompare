@@ -749,6 +749,7 @@ protected:
 	void drawMeOnly(CC_DRAW_CONTEXT& context) override;
 	void drawMeOnly_old(CC_DRAW_CONTEXT& context);
 	void drawMeOnly_new(CC_DRAW_CONTEXT& context);
+	void drawMeOnly_test(CC_DRAW_CONTEXT& context);
 	void applyGLTransformation(const ccGLMatrix& trans) override;
 	bool toFile_MeOnly(QFile& out) const override;
 	bool fromFile_MeOnly(QFile& in, short dataVersion, int flags, LoadedIDMap& oldToNewIDMap) override;

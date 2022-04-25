@@ -2617,6 +2617,22 @@ struct DisplayDesc : LODLevelDesc
 	LODIndexSet* indexMap;
 };
 
+void ccPointCloud::drawMeOnly_test(CC_DRAW_CONTEXT& context)
+{
+	QOpenGLFunctions_4_3_Core* glFunc = context.glFunctions<QOpenGLFunctions_4_3_Core>();
+	assert(glFunc != nullptr);
+
+
+	float p[16];
+	float mv[16];
+	glFunc->glGetFloatv(GL_PROJECTION_MATRIX, p);
+	glFunc->glGetFloatv(GL_MODELVIEW_MATRIX, mv);
+
+	for (int i = 0; i < 16; i++) {
+		ccLog::PrintDebug(QString("[%1] mv: %2, p: %3").arg(i).arg(mv[i]).arg(p[i]));
+	}
+}
+
 void ccPointCloud::drawMeOnly_old(CC_DRAW_CONTEXT& context)
 {
 	if (m_points.empty())
@@ -2629,8 +2645,21 @@ void ccPointCloud::drawMeOnly_old(CC_DRAW_CONTEXT& context)
 	if (glFunc == nullptr)
 		return;
 
+	float mv_f[16];
+	float proj_f[16];
+	
+	glFunc->glGetFloatv(GL_PROJECTION_MATRIX, proj_f);
+	glFunc->glGetFloatv(GL_MODELVIEW_MATRIX, mv_f);
+
+	for (int i = 0; i < 16; i++) {
+		ccLog::PrintDebug(QString("[%1] mv: %2, p: %3").arg(i).arg(mv_f[i]).arg(proj_f[i]));
+	}
+
+
+
 	if (MACRO_Draw3D(context))
 	{
+		ccLog::PrintDebug("Draw3D");
 		//we get display parameters
 		glDrawParams glParams;
 		getDrawingParameters(glParams);
@@ -2642,6 +2671,689 @@ void ccPointCloud::drawMeOnly_old(CC_DRAW_CONTEXT& context)
 
 		//can't display a SF without... a SF... and an active color scale!
 		assert(!glParams.showSF || hasDisplayedScalarField());
+
+		//standard case: list names pushing
+		bool pushName = MACRO_DrawEntityNames(context);
+		if (pushName)
+		{
+			//not fast at all!
+			if (MACRO_DrawFastNamesOnly(context))
+			{
+				return;
+			}
+
+			glFunc->glPushName(getUniqueIDForDisplay());
+			//minimal display for picking mode!
+			glParams.showNorms = false;
+			glParams.showColors = false;
+			if (glParams.showSF && m_currentDisplayedScalarField->areNaNValuesShownInGrey())
+			{
+				glParams.showSF = false; //--> we keep it only if SF 'NaN' values are potentially hidden
+			}
+		}
+
+		// L.O.D. display
+		DisplayDesc toDisplay(0, size());
+		if (!pushName)
+		{
+			if (context.decimateCloudOnMove
+				&& toDisplay.count > context.minLODPointCount
+				&& MACRO_LODActivated(context)
+				)
+			{
+				bool skipLoD = false;
+
+				//is there a LoD structure associated yet?
+				if (!m_lod || !m_lod->isBroken())
+				{
+					if (!m_lod || m_lod->isNull())
+					{
+						//auto-init LoD structure
+						//DGM: can't spawn a progress dialog here as the process will be async
+						//ccProgressDialog pDlg(false, context.display ? context.display->asWidget() : 0);
+						initLOD(/*&pDlg*/);
+					}
+					else
+					{
+						assert(m_lod);
+
+						unsigned char maxLevel = m_lod->maxLevel();
+						bool underConstruction = m_lod->isUnderConstruction();
+
+						//if the cloud has less LOD levels than the minimum to display
+						if (underConstruction || maxLevel == 0)
+						{
+							//not yet ready
+							context.moreLODPointsAvailable = underConstruction;
+							context.higherLODLevelsAvailable = false;
+						}
+						else if (context.stereoPassIndex == 0)
+						{
+							if (context.currentLODLevel == 0)
+							{
+								//get the current viewport and OpenGL matrices
+								ccGLCameraParameters camera;
+								context.display->getGLCameraParameters(camera);
+								//replace the viewport and matrices by the real ones
+								glFunc->glGetIntegerv(GL_VIEWPORT, camera.viewport);
+								glFunc->glGetDoublev(GL_PROJECTION_MATRIX, camera.projectionMat.data());
+								glFunc->glGetDoublev(GL_MODELVIEW_MATRIX, camera.modelViewMat.data());
+								//camera frustum
+								Frustum frustum(camera.modelViewMat, camera.projectionMat);
+
+								//first time: we flag the cells visibility and count the number of visible points
+								m_lod->flagVisibility(frustum, m_clipPlanes.empty() ? nullptr : &m_clipPlanes);
+							}
+
+							unsigned remainingPointsAtThisLevel = 0;
+							toDisplay.startIndex = 0;
+							toDisplay.count = MAX_POINT_COUNT_PER_LOD_RENDER_PASS;
+							toDisplay.indexMap = &m_lod->getIndexMap(context.currentLODLevel, toDisplay.count, remainingPointsAtThisLevel);
+							if (toDisplay.count == 0)
+							{
+								//nothing to draw at this level
+								toDisplay.indexMap = nullptr;
+							}
+							else
+							{
+								assert(toDisplay.count == toDisplay.indexMap->size());
+								toDisplay.endIndex = toDisplay.startIndex + toDisplay.count;
+							}
+
+							//could we draw more points at the next level?
+							context.moreLODPointsAvailable = (remainingPointsAtThisLevel != 0);
+							context.higherLODLevelsAvailable = (!m_lod->allDisplayed() && context.currentLODLevel + 1 <= maxLevel);
+						}
+					}
+				}
+
+				if (!toDisplay.indexMap && !skipLoD)
+				{
+					//if we don't have a LoD map, we can only display points at level 0!
+					if (context.currentLODLevel != 0)
+					{
+						return;
+					}
+
+					//we wait for the LOD to be ready
+					//meanwhile we will display less points
+					if (context.minLODPointCount && toDisplay.count > context.minLODPointCount)
+					{
+						GLint maxStride = 2048;
+#ifdef GL_MAX_VERTEX_ATTRIB_STRIDE
+						glFunc->glGetIntegerv(GL_MAX_VERTEX_ATTRIB_STRIDE, &maxStride);
+#endif
+						//maxStride == decimStep * 3 * sizeof(PointCoordinateType)
+						toDisplay.decimStep = static_cast<int>(ceil(static_cast<float>(toDisplay.count) / context.minLODPointCount));
+						toDisplay.decimStep = std::min<unsigned>(toDisplay.decimStep, maxStride / (3 * sizeof(PointCoordinateType)));
+					}
+				}
+			}
+		}
+
+		//ccLog::Print(QString("Rendering %1 points starting from index %2 (LoD = %3 / PN = %4)").arg(toDisplay.count).arg(toDisplay.startIndex).arg(toDisplay.indexMap ? "yes" : "no").arg(pushName ? "yes" : "no"));
+
+		glFunc->glPushAttrib(GL_LIGHTING_BIT | GL_COLOR_BUFFER_BIT | GL_TRANSFORM_BIT | GL_POINT_BIT);
+
+		if (glParams.showSF || glParams.showColors)
+		{
+			glFunc->glColorMaterial(GL_FRONT_AND_BACK, GL_DIFFUSE);
+			glFunc->glEnable(GL_COLOR_MATERIAL);
+			glFunc->glEnable(GL_BLEND);
+		}
+
+		if (glParams.showColors && isColorOverridden())
+		{
+			ccGL::Color4v(glFunc, m_tempColor.rgba);
+			glParams.showColors = false;
+		}
+		else
+		{
+			ccGL::Color4v(glFunc, context.pointsDefaultCol.rgba);
+		}
+
+		//in the case we need normals (i.e. lighting)
+		if (glParams.showNorms)
+		{
+			glFunc->glEnable(GL_RESCALE_NORMAL);
+			glFunc->glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, CC_DEFAULT_CLOUD_AMBIENT_COLOR.rgba);
+			glFunc->glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, CC_DEFAULT_CLOUD_SPECULAR_COLOR.rgba);
+			glFunc->glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, CC_DEFAULT_CLOUD_DIFFUSE_COLOR.rgba);
+			glFunc->glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, CC_DEFAULT_CLOUD_EMISSION_COLOR.rgba);
+			glFunc->glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, CC_DEFAULT_CLOUD_SHININESS);
+			glFunc->glEnable(GL_LIGHTING);
+
+			if (glParams.showSF)
+			{
+				//we must get rid of lights 'color' if a scalar field is displayed!
+				ccMaterial::MakeLightsNeutral(context.qGLContext);
+			}
+		}
+
+		/*** DISPLAY ***/
+
+		//rounded points
+		if (context.drawRoundedPoints)
+		{
+			glFunc->glPushAttrib(GL_POINT_BIT);
+			//DGM: alpha/blending doesn't work well because it creates a halo around points with a potentially wrong color (due to the display order)
+			//glFunc->glDisable(GL_BLEND);
+			glFunc->glEnable(GL_POINT_SMOOTH);
+			//glFunc->glEnable(GL_ALPHA_TEST);
+			//glFunc->glAlphaFunc(GL_GREATER, 0.5);
+			//glFunc->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+			//glFunc->glEnable(GL_BLEND);
+		}
+
+		//custom point size?
+		if (m_pointSize != 0)
+		{
+			glFunc->glPointSize(static_cast<GLfloat>(m_pointSize));
+		}
+
+		//main display procedure
+		{
+			//if some points are hidden (= visibility table instantiated), we can't use display arrays :(
+			if (isVisibilityTableInstantiated())
+			{
+				assert(m_pointsVisibility.size() == m_points.size());
+				//compressed normals set
+				const ccNormalVectors* compressedNormals = ccNormalVectors::GetUniqueInstance();
+				assert(compressedNormals);
+
+				glFunc->glBegin(GL_POINTS);
+
+				for (unsigned j = toDisplay.startIndex; j < toDisplay.endIndex; j += toDisplay.decimStep)
+				{
+					//we must test each point visibility
+					unsigned pointIndex = toDisplay.indexMap ? toDisplay.indexMap->at(j) : j;
+					if (m_pointsVisibility.empty() || m_pointsVisibility[pointIndex] == CCCoreLib::POINT_VISIBLE)
+					{
+						if (glParams.showSF)
+						{
+							assert(pointIndex < m_currentDisplayedScalarField->currentSize());
+							const ccColor::Rgb* col = m_currentDisplayedScalarField->getValueColor(pointIndex);
+							//we force display of points hidden because of their scalar field value
+							//to be sure that the user doesn't miss them (during manual segmentation for instance)
+							glFunc->glColor3ubv(col ? col->rgb : ccColor::lightGreyRGB.rgb); //Make sure all points are visible. No alpha used on purpose 
+						}
+						else if (glParams.showColors)
+						{
+							glFunc->glColor4ubv(m_rgbaColors->getValue(pointIndex).rgba);
+						}
+						if (glParams.showNorms)
+						{
+							ccGL::Normal3v(glFunc, compressedNormals->getNormal(m_normals->getValue(pointIndex)).u);
+						}
+						ccGL::Vertex3v(glFunc, m_points[pointIndex].u);
+					}
+				}
+
+				glFunc->glEnd();
+			}
+			else if (glParams.showSF) //no visibility table enabled + scalar field
+			{
+				assert(m_currentDisplayedScalarField);
+
+				//if some points may not be displayed, we'll have to be smarter!
+				bool hiddenPoints = m_currentDisplayedScalarField->mayHaveHiddenValues();
+
+				//whether VBOs are available (for faster display) or not
+				bool useVBOs = false;
+				if (!hiddenPoints && context.useVBOs && !toDisplay.indexMap) //VBOs are not compatible with LoD
+				{
+					//can't use VBOs if some points are hidden
+					useVBOs = updateVBOs(context, glParams);
+				}
+
+				//color ramp shader initialization
+				ccColorRampShader* colorRampShader = context.colorRampShader;
+				{
+					//color ramp shader is not compatible with VBOs (and VBOs are faster)
+					if (useVBOs)
+					{
+						colorRampShader = nullptr;
+					}
+					//FIXME: color ramp shader doesn't support log scale yet!
+					if (m_currentDisplayedScalarField->logScale())
+					{
+						colorRampShader = nullptr;
+					}
+				}
+
+				const ccScalarField::Range& sfDisplayRange = m_currentDisplayedScalarField->displayRange();
+				const ccScalarField::Range& sfSaturationRange = m_currentDisplayedScalarField->saturationRange();
+
+				if (colorRampShader)
+				{
+					//max available space for fragment's shader uniforms
+					GLint maxBytes = 0;
+					glFunc->glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_COMPONENTS, &maxBytes);
+					GLint maxComponents = (maxBytes >> 2) - 4; //leave space for the other uniforms!
+					unsigned steps = m_currentDisplayedScalarField->getColorRampSteps();
+					assert(steps != 0);
+
+					if (steps > ccColorRampShader::MaxColorRampSize() || maxComponents < static_cast<GLint>(steps))
+					{
+						ccLog::WarningDebug("Color ramp steps exceed shader limits!");
+						colorRampShader = nullptr;
+					}
+					else
+					{
+						float sfMinSatRel = 0.0f;
+						float sfMaxSatRel = 1.0f;
+						if (!m_currentDisplayedScalarField->symmetricalScale())
+						{
+							sfMinSatRel = GetNormalizedValue(sfSaturationRange.start(), sfDisplayRange);	//doesn't need to be between 0 and 1!
+							sfMaxSatRel = GetNormalizedValue(sfSaturationRange.stop(), sfDisplayRange);		//doesn't need to be between 0 and 1!
+						}
+						else
+						{
+							//we can only handle 'maximum' saturation
+							sfMinSatRel = GetSymmetricalNormalizedValue(-sfSaturationRange.stop(), sfSaturationRange);
+							sfMaxSatRel = GetSymmetricalNormalizedValue(sfSaturationRange.stop(), sfSaturationRange);
+							//we'll have to handle the 'minimum' saturation manually!
+						}
+
+						const ccColorScale::Shared& colorScale = m_currentDisplayedScalarField->getColorScale();
+						assert(colorScale);
+
+						colorRampShader->bind();
+						if (!colorRampShader->setup(glFunc, sfMinSatRel, sfMaxSatRel, steps, colorScale))
+						{
+							//An error occurred during shader initialization?
+							ccLog::WarningDebug("Failed to init ColorRamp shader!");
+							colorRampShader->release();
+							colorRampShader = nullptr;
+						}
+						else if (glParams.showNorms)
+						{
+							//we must get rid of lights material (other than ambient) for the red and green fields
+							glFunc->glPushAttrib(GL_LIGHTING_BIT);
+
+							//we use the ambient light to pass the scalar value (and 'grayed' marker) without any
+							//modification from the GPU pipeline, even if normals are enabled!
+							glFunc->glDisable(GL_COLOR_MATERIAL);
+							glFunc->glColorMaterial(GL_FRONT_AND_BACK, GL_DIFFUSE);
+							glFunc->glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT);
+							glFunc->glEnable(GL_COLOR_MATERIAL);
+
+							GLint maxLightCount;
+							glFunc->glGetIntegerv(GL_MAX_LIGHTS, &maxLightCount);
+							for (GLint i = 0; i < maxLightCount; ++i)
+							{
+								if (glFunc->glIsEnabled(GL_LIGHT0 + i))
+								{
+									float diffuse[4];
+									float ambiant[4];
+									float specular[4];
+
+									glFunc->glGetLightfv(GL_LIGHT0 + i, GL_AMBIENT, ambiant);
+									glFunc->glGetLightfv(GL_LIGHT0 + i, GL_DIFFUSE, diffuse);
+									glFunc->glGetLightfv(GL_LIGHT0 + i, GL_SPECULAR, specular);
+
+									ambiant[0] = ambiant[1] = 1.0f;
+									diffuse[0] = diffuse[1] = 0.0f;
+									specular[0] = specular[1] = 0.0f;
+
+									glFunc->glLightfv(GL_LIGHT0 + i, GL_DIFFUSE, diffuse);
+									glFunc->glLightfv(GL_LIGHT0 + i, GL_AMBIENT, ambiant);
+									glFunc->glLightfv(GL_LIGHT0 + i, GL_SPECULAR, specular);
+								}
+							}
+						}
+					}
+				}
+
+				//if all points should be displayed (fastest case)
+				if (!hiddenPoints)
+				{
+					glFunc->glEnableClientState(GL_VERTEX_ARRAY);
+					glFunc->glEnableClientState(GL_COLOR_ARRAY);
+					if (glParams.showNorms)
+					{
+						glFunc->glEnableClientState(GL_NORMAL_ARRAY);
+					}
+
+					if (toDisplay.indexMap) //LoD display
+					{
+						unsigned s = toDisplay.startIndex;
+						while (s < toDisplay.endIndex)
+						{
+							unsigned count = std::min(MAX_POINT_COUNT_PER_LOD_RENDER_PASS, toDisplay.endIndex - s);
+							unsigned e = s + count;
+
+							//points
+							glLODChunkVertexPointer<QOpenGLFunctions_2_1>(this, glFunc, *toDisplay.indexMap, s, e);
+							//normals
+							if (glParams.showNorms)
+							{
+								glLODChunkNormalPointer<QOpenGLFunctions_2_1>(m_normals, glFunc, *toDisplay.indexMap, s, e);
+							}
+							//SF colors
+							if (colorRampShader)
+							{
+								float* _sfColors = s_rgbBuffer3f;
+								bool symScale = m_currentDisplayedScalarField->symmetricalScale();
+								for (unsigned j = s; j < e; j++, _sfColors += 3)
+								{
+									unsigned pointIndex = toDisplay.indexMap->at(j);
+									ScalarType sfVal = m_currentDisplayedScalarField->getValue(pointIndex);
+									//normalized sf value
+									_sfColors[0] = symScale ? GetSymmetricalNormalizedValue(sfVal, sfSaturationRange) : GetNormalizedValue(sfVal, sfDisplayRange);
+									//flag: whether point is grayed out or not (NaN values are also rejected!)
+									_sfColors[1] = sfDisplayRange.isInRange(sfVal) ? 1.0f : 0.0f;
+									//reference value (to get the true lighting value)
+									_sfColors[2] = 1.0f;
+								}
+								glFunc->glColorPointer(3, GL_FLOAT, 0, s_rgbBuffer3f);
+							}
+							else
+							{
+								glLODChunkSFPointer<QOpenGLFunctions_2_1>(m_currentDisplayedScalarField, glFunc, *toDisplay.indexMap, s, e);
+							}
+
+							glFunc->glDrawArrays(GL_POINTS, 0, count);
+
+							s = e;
+						}
+					}
+					else
+					{
+						size_t chunkCount = ccChunk::Count(m_points);
+						for (size_t k = 0; k < chunkCount; ++k)
+						{
+							size_t chunkSize = ccChunk::Size(k, m_points);
+
+							//points
+							glChunkVertexPointer(context, k, toDisplay.decimStep, useVBOs);
+							//normals
+							if (glParams.showNorms)
+							{
+								glChunkNormalPointer(context, k, toDisplay.decimStep, useVBOs);
+							}
+							//SF colors
+							if (colorRampShader)
+							{
+								ScalarType* _sf = ccChunk::Start(*m_currentDisplayedScalarField, k);
+								float* _sfColors = s_rgbBuffer3f;
+								bool symScale = m_currentDisplayedScalarField->symmetricalScale();
+								for (unsigned j = 0; j < chunkSize; j += toDisplay.decimStep, _sf += toDisplay.decimStep, _sfColors += 3)
+								{
+									//normalized sf value
+									_sfColors[0] = symScale ? GetSymmetricalNormalizedValue(*_sf, sfSaturationRange) : GetNormalizedValue(*_sf, sfDisplayRange);
+									//flag: whether point is grayed out or not (NaN values are also rejected!)
+									_sfColors[1] = sfDisplayRange.isInRange(*_sf) ? 1.0f : 0.0f;
+									//reference value (to get the true lighting value)
+									_sfColors[2] = 1.0f;
+								}
+								glFunc->glColorPointer(3, GL_FLOAT, 0, s_rgbBuffer3f);
+							}
+							else
+							{
+								glChunkSFPointer(context, k, toDisplay.decimStep, useVBOs);
+							}
+
+							if (toDisplay.decimStep > 1)
+							{
+								chunkSize = static_cast<unsigned>(floor(static_cast<float>(chunkSize) / toDisplay.decimStep));
+							}
+							glFunc->glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(chunkSize));
+						}
+					}
+
+					if (glParams.showNorms)
+					{
+						glFunc->glDisableClientState(GL_NORMAL_ARRAY);
+					}
+					glFunc->glDisableClientState(GL_COLOR_ARRAY);
+					glFunc->glDisableClientState(GL_VERTEX_ARRAY);
+				}
+				else //potentially hidden points
+				{
+					//compressed normals set
+					const ccNormalVectors* compressedNormals = ccNormalVectors::GetUniqueInstance();
+					assert(compressedNormals);
+
+					glFunc->glBegin(GL_POINTS);
+
+					if (glParams.showNorms) //with normals (slowest case!)
+					{
+						if (colorRampShader)
+						{
+							if (!m_currentDisplayedScalarField->symmetricalScale())
+							{
+								for (unsigned j = toDisplay.startIndex; j < toDisplay.endIndex; j += toDisplay.decimStep)
+								{
+									unsigned pointIndex = (toDisplay.indexMap ? toDisplay.indexMap->at(j) : j);
+									assert(pointIndex < m_currentDisplayedScalarField->currentSize());
+									const ScalarType sf = m_currentDisplayedScalarField->getValue(pointIndex);
+									if (sfDisplayRange.isInRange(sf)) //NaN values are rejected
+									{
+										glFunc->glColor3f(GetNormalizedValue(sf, sfDisplayRange), 1.0f, 1.0f);
+										ccGL::Normal3v(glFunc, compressedNormals->getNormal(m_normals->getValue(pointIndex)).u);
+										ccGL::Vertex3v(glFunc, m_points[pointIndex].u);
+									}
+								}
+							}
+							else
+							{
+								for (unsigned j = toDisplay.startIndex; j < toDisplay.endIndex; j += toDisplay.decimStep)
+								{
+									unsigned pointIndex = (toDisplay.indexMap ? toDisplay.indexMap->at(j) : j);
+									assert(pointIndex < m_currentDisplayedScalarField->currentSize());
+									const ScalarType sf = m_currentDisplayedScalarField->getValue(pointIndex);
+									if (sfDisplayRange.isInRange(sf)) //NaN values are rejected
+									{
+										glFunc->glColor3f(GetSymmetricalNormalizedValue(sf, sfSaturationRange), 1.0f, 1.0f);
+										ccGL::Normal3v(glFunc, compressedNormals->getNormal(m_normals->getValue(pointIndex)).u);
+										ccGL::Vertex3v(glFunc, m_points[pointIndex].u);
+									}
+								}
+							}
+						}
+						else
+						{
+							for (unsigned j = toDisplay.startIndex; j < toDisplay.endIndex; j += toDisplay.decimStep)
+							{
+								unsigned pointIndex = (toDisplay.indexMap ? toDisplay.indexMap->at(j) : j);
+								assert(pointIndex < m_currentDisplayedScalarField->currentSize());
+								const ccColor::Rgb* col = m_currentDisplayedScalarField->getValueColor(pointIndex);
+								if (col)
+								{
+									glFunc->glColor3ubv(col->rgb);
+									ccGL::Normal3v(glFunc, compressedNormals->getNormal(m_normals->getValue(pointIndex)).u);
+									ccGL::Vertex3v(glFunc, m_points[pointIndex].u);
+								}
+							}
+						}
+					}
+					else //potentially hidden points without normals (a bit faster)
+					{
+						if (colorRampShader)
+						{
+							if (!m_currentDisplayedScalarField->symmetricalScale())
+							{
+								for (unsigned j = toDisplay.startIndex; j < toDisplay.endIndex; j += toDisplay.decimStep)
+								{
+									unsigned pointIndex = (toDisplay.indexMap ? toDisplay.indexMap->at(j) : j);
+									assert(pointIndex < m_currentDisplayedScalarField->currentSize());
+									const ScalarType sf = m_currentDisplayedScalarField->getValue(pointIndex);
+									if (sfDisplayRange.isInRange(sf)) //NaN values are rejected
+									{
+										glFunc->glColor3f(GetNormalizedValue(sf, sfDisplayRange), 1.0f, 1.0f);
+										ccGL::Vertex3v(glFunc, m_points[pointIndex].u);
+									}
+								}
+							}
+							else
+							{
+								for (unsigned j = toDisplay.startIndex; j < toDisplay.endIndex; j += toDisplay.decimStep)
+								{
+									unsigned pointIndex = (toDisplay.indexMap ? toDisplay.indexMap->at(j) : j);
+									assert(pointIndex < m_currentDisplayedScalarField->currentSize());
+									const ScalarType sf = m_currentDisplayedScalarField->getValue(pointIndex);
+									if (sfDisplayRange.isInRange(sf)) //NaN values are rejected
+									{
+										glFunc->glColor3f(GetSymmetricalNormalizedValue(sf, sfSaturationRange), 1.0f, 1.0f);
+										ccGL::Vertex3v(glFunc, m_points[pointIndex].u);
+									}
+								}
+							}
+						}
+						else
+						{
+							for (unsigned j = toDisplay.startIndex; j < toDisplay.endIndex; j += toDisplay.decimStep)
+							{
+								unsigned pointIndex = (toDisplay.indexMap ? toDisplay.indexMap->at(j) : j);
+								assert(pointIndex < m_currentDisplayedScalarField->currentSize());
+								const ccColor::Rgb* col = m_currentDisplayedScalarField->getValueColor(pointIndex);
+								if (col)
+								{
+									glFunc->glColor3ubv(col->rgb);
+									ccGL::Vertex3v(glFunc, m_points[pointIndex].u);
+								}
+							}
+						}
+					}
+					glFunc->glEnd();
+				}
+
+				if (colorRampShader)
+				{
+					colorRampShader->release();
+
+					if (glParams.showNorms)
+					{
+						glFunc->glPopAttrib(); //GL_LIGHTING_BIT
+					}
+				}
+			}
+			else //no visibility table enabled, no scalar field
+			{
+				bool useVBOs = context.useVBOs && !toDisplay.indexMap ? updateVBOs(context, glParams) : false; //VBOs are not compatible with LoD
+
+				size_t chunkCount = ccChunk::Count(m_points);
+
+				glFunc->glEnableClientState(GL_VERTEX_ARRAY);
+				if (glParams.showNorms)
+					glFunc->glEnableClientState(GL_NORMAL_ARRAY);
+				if (glParams.showColors)
+					glFunc->glEnableClientState(GL_COLOR_ARRAY);
+
+				if (toDisplay.indexMap) //LoD display
+				{
+					unsigned s = toDisplay.startIndex;
+					while (s < toDisplay.endIndex)
+					{
+						unsigned count = std::min(MAX_POINT_COUNT_PER_LOD_RENDER_PASS, toDisplay.endIndex - s);
+						unsigned e = s + count;
+
+						//points
+						glLODChunkVertexPointer<QOpenGLFunctions_2_1>(this, glFunc, *toDisplay.indexMap, s, e);
+						//normals
+						if (glParams.showNorms)
+							glLODChunkNormalPointer<QOpenGLFunctions_2_1>(m_normals, glFunc, *toDisplay.indexMap, s, e);
+						//colors
+						if (glParams.showColors)
+							glLODChunkColorPointer<QOpenGLFunctions_2_1>(m_rgbaColors, glFunc, *toDisplay.indexMap, s, e);
+
+						glFunc->glDrawArrays(GL_POINTS, 0, count);
+						s = e;
+					}
+				}
+				else
+				{
+					for (size_t k = 0; k < chunkCount; ++k)
+					{
+						size_t chunkSize = ccChunk::Size(k, m_points);
+
+						//points
+						glChunkVertexPointer(context, k, toDisplay.decimStep, useVBOs);
+						//normals
+						if (glParams.showNorms)
+							glChunkNormalPointer(context, k, toDisplay.decimStep, useVBOs);
+						//colors
+						if (glParams.showColors)
+							glChunkColorPointer(context, k, toDisplay.decimStep, useVBOs);
+
+						if (toDisplay.decimStep > 1)
+						{
+							chunkSize = static_cast<unsigned>(floor(static_cast<float>(chunkSize) / toDisplay.decimStep));
+						}
+						glFunc->glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(chunkSize));
+					}
+				}
+
+				glFunc->glDisableClientState(GL_VERTEX_ARRAY);
+				if (glParams.showNorms)
+					glFunc->glDisableClientState(GL_NORMAL_ARRAY);
+				if (glParams.showColors)
+					glFunc->glDisableClientState(GL_COLOR_ARRAY);
+			}
+		}
+
+		/*** END DISPLAY ***/
+
+		if (context.drawRoundedPoints)
+		{
+			glFunc->glPopAttrib(); //GL_POINT_BIT
+		}
+
+		glFunc->glPopAttrib(); //GL_LIGHTING_BIT | GL_COLOR_BUFFER_BIT | GL_TRANSFORM_BIT | GL_POINT_BIT --> will switch the light off
+
+		if (pushName)
+		{
+			glFunc->glPopName();
+		}
+	}
+	else if (MACRO_Draw2D(context))
+	{
+		ccLog::PrintDebug("Draw2D");
+		if (MACRO_Foreground(context) && !context.sfColorScaleToDisplay)
+		{
+			if (sfColorScaleShown() && sfShown())
+			{
+				//drawScale(context);
+				addColorRampInfo(context);
+			}
+		}
+	}
+}
+
+void ccPointCloud::drawMeOnly_new(CC_DRAW_CONTEXT& context)
+{
+	QOpenGLFunctions_4_3_Core* glFunc = context.glFunctions<QOpenGLFunctions_4_3_Core>();
+	assert(glFunc != nullptr);
+
+	float mv_f[16];
+	float proj_f[16];
+	
+	glFunc->glGetFloatv(GL_PROJECTION_MATRIX, proj_f);
+	glFunc->glGetFloatv(GL_MODELVIEW_MATRIX, mv_f);
+
+	for (int i = 0; i < 16; i++) {
+		ccLog::PrintDebug(QString("[%1] mv: %2, p: %3").arg(i).arg(mv_f[i]).arg(proj_f[i]));
+	}
+
+	if (glFunc == nullptr)
+		return;
+
+	if (MACRO_Draw3D(context))
+	{
+		ccLog::PrintDebug("Draw3D");
+		glDrawParams glParams;
+		getDrawingParameters(glParams);
+		//no normals shading without light!
+		if (!MACRO_LightIsEnabled(context))
+		{
+			glParams.showNorms = false;
+		}
+
+		//can't display a SF without... a SF... and an active color scale!
+		assert(!glParams.showSF || hasDisplayedScalarField());
+
+
 
 
 		// L.O.D. display
@@ -2682,6 +3394,7 @@ void ccPointCloud::drawMeOnly_old(CC_DRAW_CONTEXT& context)
 					{
 						if (context.currentLODLevel == 0)
 						{
+							ccLog::PrintDebug("get matrices");
 							//get the current viewport and OpenGL matrices
 							ccGLCameraParameters camera;
 							context.display->getGLCameraParameters(camera);
@@ -2731,272 +3444,6 @@ void ccPointCloud::drawMeOnly_old(CC_DRAW_CONTEXT& context)
 				if (context.minLODPointCount && toDisplay.count > context.minLODPointCount)
 				{
 					GLint maxStride = 2048;
-#ifdef GL_MAX_VERTEX_ATTRIB_STRIDE
-					glFunc->glGetIntegerv(GL_MAX_VERTEX_ATTRIB_STRIDE, &maxStride);
-#endif
-					//maxStride == decimStep * 3 * sizeof(PointCoordinateType)
-					toDisplay.decimStep = static_cast<int>(ceil(static_cast<float>(toDisplay.count) / context.minLODPointCount));
-					toDisplay.decimStep = std::min<unsigned>(toDisplay.decimStep, maxStride / (3 * sizeof(PointCoordinateType)));
-				}
-			}
-		}
-
-		//ccLog::Print(QString("Rendering %1 points starting from index %2 (LoD = %3 / PN = %4)").arg(toDisplay.count).arg(toDisplay.startIndex).arg(toDisplay.indexMap ? "yes" : "no").arg(pushName ? "yes" : "no"));
-
-		glFunc->glPushAttrib(GL_LIGHTING_BIT | GL_COLOR_BUFFER_BIT | GL_TRANSFORM_BIT | GL_POINT_BIT);
-
-		/*
-		if (glParams.showSF || glParams.showColors)
-		{
-			glFunc->glColorMaterial(GL_FRONT_AND_BACK, GL_DIFFUSE);
-			glFunc->glEnable(GL_COLOR_MATERIAL);
-			glFunc->glEnable(GL_BLEND);
-		}
-
-		if (glParams.showColors && isColorOverridden())
-		{
-			ccGL::Color4v(glFunc, m_tempColor.rgba);
-			glParams.showColors = false;
-		}
-		else
-		{
-			ccGL::Color4v(glFunc, context.pointsDefaultCol.rgba);
-		}
-		*/
-
-		// simplified 
-		glFunc->glColor4ubv(context.pointsDefaultCol.rgba);
-
-
-		/*
-		//in the case we need normals (i.e. lighting)
-		if (glParams.showNorms)
-		{
-			glFunc->glEnable(GL_RESCALE_NORMAL);
-			glFunc->glMaterialfv(GL_FRONT_AND_BACK,	GL_AMBIENT,		CC_DEFAULT_CLOUD_AMBIENT_COLOR.rgba  );
-			glFunc->glMaterialfv(GL_FRONT_AND_BACK,	GL_SPECULAR,	CC_DEFAULT_CLOUD_SPECULAR_COLOR.rgba );
-			glFunc->glMaterialfv(GL_FRONT_AND_BACK,	GL_DIFFUSE,		CC_DEFAULT_CLOUD_DIFFUSE_COLOR.rgba  );
-			glFunc->glMaterialfv(GL_FRONT_AND_BACK,	GL_EMISSION,	CC_DEFAULT_CLOUD_EMISSION_COLOR.rgba );
-			glFunc->glMaterialf (GL_FRONT_AND_BACK,	GL_SHININESS,	CC_DEFAULT_CLOUD_SHININESS);
-			glFunc->glEnable(GL_LIGHTING);
-
-			if (glParams.showSF)
-			{
-				//we must get rid of lights 'color' if a scalar field is displayed!
-				ccMaterial::MakeLightsNeutral(context.qGLContext);
-			}
-		}
-		*/
-
-		/*** DISPLAY ***/
-
-		//rounded points
-		if (context.drawRoundedPoints)
-		{
-			glFunc->glPushAttrib(GL_POINT_BIT);
-			//DGM: alpha/blending doesn't work well because it creates a halo around points with a potentially wrong color (due to the display order)
-			//glFunc->glDisable(GL_BLEND);
-			glFunc->glEnable(GL_POINT_SMOOTH);
-			//glFunc->glEnable(GL_ALPHA_TEST);
-			//glFunc->glAlphaFunc(GL_GREATER, 0.5);
-			//glFunc->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-			//glFunc->glEnable(GL_BLEND);
-		}
-
-		//custom point size?
-		if (m_pointSize != 0)
-		{
-			glFunc->glPointSize(static_cast<GLfloat>(m_pointSize));
-		}
-
-
-		// simplified display prodcedure 
-		{
-			bool useVBOs = context.useVBOs && !toDisplay.indexMap ? updateVBOs(context, glParams) : false; //VBOs are not compatible with LoD
-
-			ccLog::Print(QString("draw simplified"));
-
-			size_t chunkCount = ccChunk::Count(m_points);
-
-			glFunc->glEnableClientState(GL_VERTEX_ARRAY);
-			if (glParams.showNorms)
-				glFunc->glEnableClientState(GL_NORMAL_ARRAY);
-			if (glParams.showColors)
-				glFunc->glEnableClientState(GL_COLOR_ARRAY);
-
-			
-			for (size_t k = 0; k < chunkCount; ++k)
-			{
-				size_t chunkSize = ccChunk::Size(k, m_points);
-
-				ccLog::PrintDebug(QString("chunkSize=%1, k=%2, decimStep=%3").arg(chunkCount).arg(k).arg(toDisplay.decimStep));
-
-				//points
-				glChunkVertexPointer(context, k, toDisplay.decimStep, useVBOs);
-				//normals
-				if (glParams.showNorms)
-					glChunkNormalPointer(context, k, toDisplay.decimStep, useVBOs);
-				//colors
-				if (glParams.showColors)
-					glChunkColorPointer(context, k, toDisplay.decimStep, useVBOs);
-
-				if (toDisplay.decimStep > 1)
-				{
-					chunkSize = static_cast<unsigned>(floor(static_cast<float>(chunkSize) / toDisplay.decimStep));
-				}
-				glFunc->glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(chunkSize));
-			}
-
-
-			glFunc->glDisableClientState(GL_VERTEX_ARRAY);
-			if (glParams.showNorms)
-				glFunc->glDisableClientState(GL_NORMAL_ARRAY);
-			if (glParams.showColors)
-				glFunc->glDisableClientState(GL_COLOR_ARRAY);
-
-		}
-
-
-		/*** END DISPLAY ***/
-
-		if (context.drawRoundedPoints)
-		{
-			glFunc->glPopAttrib(); //GL_POINT_BIT
-		}
-
-		glFunc->glPopAttrib(); //GL_LIGHTING_BIT | GL_COLOR_BUFFER_BIT | GL_TRANSFORM_BIT | GL_POINT_BIT --> will switch the light off
-		
-		/*
-		if (pushName)
-		{
-			glFunc->glPopName();
-		}
-		*/
-	}
-	else if (MACRO_Draw2D(context))
-	{
-		if (MACRO_Foreground(context) && !context.sfColorScaleToDisplay)
-		{
-			if (sfColorScaleShown() && sfShown())
-			{
-				//drawScale(context);
-				addColorRampInfo(context);
-			}
-		}
-	}
-}
-
-void ccPointCloud::drawMeOnly_new(CC_DRAW_CONTEXT& context)
-{
-	QOpenGLFunctions_4_3_Core* glFunc = context.glFunctions<QOpenGLFunctions_4_3_Core>();
-	assert(glFunc != nullptr);
-
-	if (glFunc == nullptr)
-		return;
-
-	if (MACRO_Draw3D(context))
-	{
-		glDrawParams glParams;
-		getDrawingParameters(glParams);
-		//no normals shading without light!
-		if (!MACRO_LightIsEnabled(context))
-		{
-			glParams.showNorms = false;
-		}
-
-		//can't display a SF without... a SF... and an active color scale!
-		assert(!glParams.showSF || hasDisplayedScalarField());
-
-
-
-
-		// L.O.D. display
-		DisplayDesc toDisplay(0, size());
-
-		if (	context.decimateCloudOnMove
-			&&	toDisplay.count > context.minLODPointCount
-			&&	MACRO_LODActivated(context)
-			)
-		{
-			bool skipLoD = false;
-
-			//is there a LoD structure associated yet?
-			if (!m_lod || !m_lod->isBroken())
-			{
-				if (!m_lod || m_lod->isNull())
-				{
-					//auto-init LoD structure
-					//DGM: can't spawn a progress dialog here as the process will be async
-					//ccProgressDialog pDlg(false, context.display ? context.display->asWidget() : 0);
-					initLOD(/*&pDlg*/);
-				}
-				else
-				{
-					assert(m_lod);
-
-					unsigned char maxLevel = m_lod->maxLevel();
-					bool underConstruction = m_lod->isUnderConstruction();
-
-					//if the cloud has less LOD levels than the minimum to display
-					if (underConstruction || maxLevel == 0)
-					{
-						//not yet ready
-						context.moreLODPointsAvailable = underConstruction;
-						context.higherLODLevelsAvailable = false;
-					}
-					else if (context.stereoPassIndex == 0)
-					{
-						if (context.currentLODLevel == 0)
-						{
-							//get the current viewport and OpenGL matrices
-							ccGLCameraParameters camera;
-							context.display->getGLCameraParameters(camera);
-							//replace the viewport and matrices by the real ones
-							//glFunc->glGetIntegerv(GL_VIEWPORT, camera.viewport);
-							//glFunc->glGetDoublev(GL_PROJECTION_MATRIX, camera.projectionMat.data());
-							//glFunc->glGetDoublev(GL_MODELVIEW_MATRIX, camera.modelViewMat.data());
-							//camera frustum
-							Frustum frustum(camera.modelViewMat, camera.projectionMat);
-
-							//first time: we flag the cells visibility and count the number of visible points
-							m_lod->flagVisibility(frustum, m_clipPlanes.empty() ? nullptr : &m_clipPlanes);
-						}
-
-						unsigned remainingPointsAtThisLevel = 0;
-						toDisplay.startIndex = 0;
-						toDisplay.count = MAX_POINT_COUNT_PER_LOD_RENDER_PASS;
-						toDisplay.indexMap = &m_lod->getIndexMap(context.currentLODLevel, toDisplay.count, remainingPointsAtThisLevel);
-						if (toDisplay.count == 0)
-						{
-							//nothing to draw at this level
-							toDisplay.indexMap = nullptr;
-						}
-						else
-						{
-							assert(toDisplay.count == toDisplay.indexMap->size());
-							toDisplay.endIndex = toDisplay.startIndex + toDisplay.count;
-						}
-
-						//could we draw more points at the next level?
-						context.moreLODPointsAvailable = (remainingPointsAtThisLevel != 0);
-						context.higherLODLevelsAvailable = (!m_lod->allDisplayed() && context.currentLODLevel + 1 <= maxLevel);
-					}
-				}
-			}
-
-			if (!toDisplay.indexMap && !skipLoD)
-			{
-				//if we don't have a LoD map, we can only display points at level 0!
-				if (context.currentLODLevel != 0)
-				{
-					return;
-				}
-
-				//we wait for the LOD to be ready
-				//meanwhile we will display less points
-				if (context.minLODPointCount && toDisplay.count > context.minLODPointCount)
-				{
-					GLint maxStride = 2048;
 					//maxStride == decimStep * 3 * sizeof(PointCoordinateType)
 					toDisplay.decimStep = static_cast<int>(ceil(static_cast<float>(toDisplay.count) / context.minLODPointCount));
 					toDisplay.decimStep = std::min<unsigned>(toDisplay.decimStep, maxStride / (3 * sizeof(PointCoordinateType)));
@@ -3011,21 +3458,12 @@ void ccPointCloud::drawMeOnly_new(CC_DRAW_CONTEXT& context)
 		}
 
 		// simplified display prodcedure 
+
 		{
 			bool useVBOs = context.useVBOs && !toDisplay.indexMap ? updateVBOs2(context, glParams) : false; //VBOs are not compatible with LoD
 
 			size_t chunkCount = ccChunk::Count(m_points);
 
-			//glFunc->glEnableClientState(GL_VERTEX_ARRAY);
-			
-			//if (glParams.showNorms)
-			//		glFunc->glEnableClientState(GL_NORMAL_ARRAY);
-		
-			//if (glParams.showColors)
-			//	glFunc->glEnableClientState(GL_COLOR_ARRAY);
-
-
-			
 			for (size_t k = 0; k < chunkCount; ++k)
 			{
 				size_t chunkSize = ccChunk::Size(k, m_points);
@@ -3040,38 +3478,28 @@ void ccPointCloud::drawMeOnly_new(CC_DRAW_CONTEXT& context)
 
 					ccShader* shader = context.customRenderingShader; 
 
-					ccGLCameraParameters camera;
-					context.display->getGLCameraParameters(camera);
-
 					shader->bind();
 					
 					shader->enableAttributeArray("Pos");
 					shader->setAttributeBuffer("Pos", GL_FLOAT, 0, 3, 0);
 
-					//ccLog::PrintDebug(QString("rgbShift %1").arg(m_vboManager.vbos[k]->rgbShift));
-
 					shader->enableAttributeArray("Color");
 					shader->setAttributeBuffer("Color", GL_UNSIGNED_BYTE, m_vboManager.vbos[k]->rgbShift, 4, 0);
-					//shader->setAttributeBuffer("Color", GL_FLOAT, 0, 4, 0);
-	
 
-					double* mv_d = camera.modelViewMat.data();
-					double* proj_d = camera.projectionMat.data();
-
-					float mv_f[16];
-					float proj_f[16];
-					for (int i = 0; i < 16; i++) {
-						mv_f[i] = mv_d[i];
-						proj_f[i] = proj_d[i];
-					}
-
-					
+					// TODO normals
+						
 					QMatrix4x4 mat1(mv_f);
 					QMatrix4x4 mat2(proj_f);
 
-					shader->setUniformValue(shader->uniformLocation("mvp"), mat1 * mat2);
-					
-					
+					/*
+					ccLog::PrintDebug("Befor drawing:");
+					for (int i = 0; i < 16; i++) {
+						ccLog::PrintDebug(QString("[%1] mv: %2, p: %3").arg(i).arg(mv_f[i]).arg(proj_f[i]));
+					}
+					*/
+
+					shader->setUniformValue(shader->uniformLocation("ModelView"), mat1);
+					shader->setUniformValue(shader->uniformLocation("Projection"), mat2);
 
 				}
 				else {
@@ -3079,69 +3507,36 @@ void ccPointCloud::drawMeOnly_new(CC_DRAW_CONTEXT& context)
 				}
 
 
-
-				//points
-				//glChunkVertexPointer2(context, k, toDisplay.decimStep, useVBOs);
-			
-				/*
-				//normals
-				if (glParams.showNorms)
-					glChunkNormalPointer(context, k, toDisplay.decimStep, useVBOs);
-				*/
-				//colors
-				//if (glParams.showColors)
-				//	glChunkColorPointer(context, k, toDisplay.decimStep, useVBOs);
-
 				if (toDisplay.decimStep > 1)
 				{
 					chunkSize = static_cast<unsigned>(floor(static_cast<float>(chunkSize) / toDisplay.decimStep));
 				}
-				ccLog::PrintDebug(QString("glDrawArrays, %1 points").arg(static_cast<GLsizei>(chunkSize)));
+				//ccLog::PrintDebug(QString("glDrawArrays, %1 points").arg(static_cast<GLsizei>(chunkSize)));
 				glFunc->glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(chunkSize));
 			}
 
 			glFunc->glUseProgram(0);
 
-
-			/*
-			glFunc->glDisableClientState(GL_VERTEX_ARRAY);
-			if (glParams.showNorms)
-				glFunc->glDisableClientState(GL_NORMAL_ARRAY);
-			if (glParams.showColors)
-				glFunc->glDisableClientState(GL_COLOR_ARRAY);
-			*/
-
 		}
-
-
-		/*** END DISPLAY ***/
-
-		/*
-		if (context.drawRoundedPoints)
-		{
-			glFunc->glPopAttrib(); //GL_POINT_BIT
-		}
-
-		glFunc->glPopAttrib(); //GL_LIGHTING_BIT | GL_COLOR_BUFFER_BIT | GL_TRANSFORM_BIT | GL_POINT_BIT --> will switch the light off
-		*/
-		
-		/*
-		if (pushName)
-		{
-			glFunc->glPopName();
-		}
-		*/
-
-
-
-
 	}
 	else if (MACRO_Draw2D(context)) {
+		ccLog::PrintDebug("Draw2D");
+		if (MACRO_Foreground(context) && !context.sfColorScaleToDisplay)
+		{
+			if (sfColorScaleShown() && sfShown())
+			{
+				//drawScale(context);
+				addColorRampInfo(context);
+			}
+		}
+
 	}
+
 }
 
 void ccPointCloud::drawMeOnly(CC_DRAW_CONTEXT& context)
 {
+	ccLog::PrintDebug("drawMeOnly");
 	drawMeOnly_new(context);
 }
 
