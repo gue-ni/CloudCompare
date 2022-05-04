@@ -873,6 +873,9 @@ bool ccGLWindow::initialize()
 						&&	context()->hasExtension(QByteArrayLiteral("GL_ARB_shader_objects"))
 						&&	context()->hasExtension(QByteArrayLiteral("GL_ARB_vertex_shader"))
 						&&	context()->hasExtension(QByteArrayLiteral("GL_ARB_fragment_shader"));
+
+		m_computeShadersEnabled = context()->hasExtension(QByteArrayLiteral("GL_ARB_compute_shader"));
+
 		if (!m_shadersEnabled)
 		{
 			//if no shader, no GL filter!
@@ -947,6 +950,28 @@ bool ccGLWindow::initialize()
 						}
 					}
 				}
+			}
+
+			// TODO add compute shader if possible
+			if (m_computeShadersEnabled) {
+				ccLog::PrintDebug("Compute Shaders enabled");
+			
+				const QString shaderPath = QStringLiteral( "%1/Compute/compute.comp" ).arg( *s_shaderPath );
+				
+				ccShader* shader = new ccShader();
+				QString error;
+				if (!shader->loadProgram(shaderPath, error))
+				{
+					ccLog::Warning(QString("[3D View %1] Failed to load compute shader").arg(m_uniqueID));
+				}
+				else {
+					m_customComputeShader = shader;
+					ccLog::PrintDebug("Loaded compute shader");
+				}
+
+			}
+			else {
+				ccLog::PrintDebug("Compute Shaders disabled");
 			}
 
 			if (!m_customRenderingShader) {
@@ -1907,6 +1932,7 @@ void ccGLWindow::drawBackground(CC_DRAW_CONTEXT& CONTEXT, RenderingParams& rende
 
 void ccGLWindow::fullRenderingPass(CC_DRAW_CONTEXT& CONTEXT, RenderingParams& renderingParams)
 {
+	ccLog::PrintDebug("fullRenderingPass");
 	//visual traces
 	QStringList diagStrings;
 	if (m_showDebugTraces)
@@ -2476,6 +2502,12 @@ void ccGLWindow::draw3D(CC_DRAW_CONTEXT& CONTEXT, RenderingParams& renderingPara
 			drawCustomLight();
 		}
 	}
+
+	/*
+	for (int i = 0; i < 16; i++) {
+		ccLog::PrintDebug(QString("3D [%1] mv: %2, p: %3").arg(i).arg(modelViewMat.data()[i]).arg(projectionMat.data()[i]));
+	}
+	*/
 
 	//we draw 3D entities
 	if (m_globalDBRoot)
@@ -4654,6 +4686,7 @@ void ccGLWindow::wheelEvent(QWheelEvent* event)
 
 void ccGLWindow::onWheelEvent(float wheelDelta_deg)
 {
+	ccLog::PrintDebug("onWheelEvent");
 	if (m_bubbleViewModeEnabled)
 	{
 		//to zoom in and out we simply change the fov in bubble-view mode!
@@ -7332,9 +7365,7 @@ bool ccGLWindow::getClick3DPos(int x, int y, CCVector3d& P3D, bool usePBO)
 	return camera.unproject(P2D, P3D);
 }
 
-void ccGLWindow::lockRotationAxis(bool state, const CCVector3d& axis)
-{
-	m_rotationAxisLocked = state;
+void ccGLWindow::lockRotationAxis(bool state, const CCVector3d& axis) { m_rotationAxisLocked = state;
 	m_lockedRotationAxis = axis;
 	m_lockedRotationAxis.normalize();
 }

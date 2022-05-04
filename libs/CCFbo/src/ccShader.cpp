@@ -65,3 +65,16 @@ bool ccShader::loadProgram(QString vertexShaderFile, QString fragShaderFile, QSt
 
 	return true;
 }
+
+bool ccShader::loadProgram(QString computeShaderFile, QString& error)
+{
+	if (!computeShaderFile.isEmpty() && !addShaderFromSourceFile(QOpenGLShader::Compute, computeShaderFile))
+	{
+		error = log();
+		return false;
+	}
+	
+
+	return true;
+
+}

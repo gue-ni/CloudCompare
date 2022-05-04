@@ -1175,6 +1175,8 @@ protected: //members
 	//! Whether shaders are enabled or not
 	bool m_shadersEnabled;
 
+	bool m_computeShadersEnabled;
+
 	//! Currently active FBO (frame buffer object)
 	ccFrameBufferObject* m_activeFbo;
 	//! First default FBO (frame buffer object)
@@ -1190,6 +1192,8 @@ protected: //members
 	ccColorRampShader* m_colorRampShader;
 	// Custom rendering shader (OpenGL 3.3+)
 	ccShader* m_customRenderingShader;
+	// Custom compute shader (OpengGL 4.3+)	
+	ccShader* m_customComputeShader;
 
 	//! Active GL filter
 	ccGlFilter* m_activeGLFilter;

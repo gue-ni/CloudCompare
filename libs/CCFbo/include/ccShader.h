@@ -56,4 +56,8 @@ public:
 		\param error error string (if any error occurred)
 	**/
 	virtual bool loadProgram(QString vertShaderFile, QString fragShaderFile, QString& error);
+
+	virtual bool loadProgram(QString computeShaderFile, QString& error);
+
+
 };

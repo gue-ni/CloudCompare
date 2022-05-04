@@ -131,8 +131,12 @@ struct ccGLDrawContext
 	ccColorRampShader* colorRampShader;
 	//! Custom rendering shader (OpenGL 3.3+)
 	ccShader* customRenderingShader;
+	//! Compute shader (OpenGL 4.3+)
+	ccShader* customComputeShader;
+
 	//! Use VBOs for faster display
 	bool useVBOs;
+
 
 	//! Label marker size (radius)
 	float labelMarkerSize;
