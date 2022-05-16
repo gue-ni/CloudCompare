@@ -955,27 +955,27 @@ bool ccGLWindow::initialize()
 			// TODO add compute shader if possible
 			if (m_computeShadersEnabled) {
 				ccLog::PrintDebug("Compute Shaders enabled");
-			
-				const QString shaderPath = QStringLiteral( "%1/Compute/compute.comp" ).arg( *s_shaderPath );
-				
-				ccShader* shader = new ccShader();
-				QString error;
-				if (!shader->loadProgram(shaderPath, error))
-				{
-					ccLog::Warning(QString("[3D View %1] Failed to load compute shader").arg(m_uniqueID));
-				}
-				else {
-					m_customComputeShader = shader;
-					ccLog::PrintDebug("Loaded compute shader");
-				}
 
+				if (!m_customComputeShader) {
+					const QString shaderPath = QStringLiteral( "%1/Compute/compute.comp" ).arg( *s_shaderPath );
+					
+					ccShader* shader = new ccShader();
+					QString error;
+					if (!shader->loadProgram(shaderPath, error))
+					{
+						ccLog::Warning(QString("[3D View %1] Failed to load compute shader").arg(m_uniqueID));
+					}
+					else {
+						m_customComputeShader = shader;
+						ccLog::PrintDebug("Loaded compute shader");
+					}
+				}
 			}
 			else {
 				ccLog::PrintDebug("Compute Shaders disabled");
 			}
 
 			if (!m_customRenderingShader) {
-				ccLog::PrintDebug("trying to load custom Shader");
 				const QString shaderPath = QStringLiteral( "%1/PointCloud" ).arg( *s_shaderPath );
 				ccShader* shader = new ccShader();
 				QString error;
@@ -985,6 +985,7 @@ bool ccGLWindow::initialize()
 				}
 				else {
 					m_customRenderingShader = shader;
+					ccLog::PrintDebug("Loaded custom Shader");
 				}
 
 				// TODO?

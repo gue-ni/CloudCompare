@@ -33,6 +33,7 @@
 
 //Qt
 #include <QGLBuffer>
+//#include <QOpenGLBuffer>
 
 class ccScalarField;
 class ccPolyline;
@@ -742,6 +743,11 @@ public: //other methods
 
 	//! Returns the VBOs size (if any)
 	size_t vboSize() const;
+
+
+	QGLBuffer arrayBuf;
+	QGLBuffer indexBuf;
+
 
 protected:
 

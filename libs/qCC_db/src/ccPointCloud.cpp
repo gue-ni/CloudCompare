@@ -27,6 +27,7 @@
 #include <ManualSegmentationTools.h>
 #include <ReferenceCloud.h>
 
+
 //local
 #include "cc2DLabel.h"
 #include "ccChunk.h"
@@ -52,6 +53,7 @@
 //Qt
 #include <QCoreApplication>
 #include <QElapsedTimer>
+#include <QOpenGLBuffer>
 
 //system
 #include <cassert>
@@ -2623,14 +2625,117 @@ void ccPointCloud::drawMeOnly_test(CC_DRAW_CONTEXT& context)
 	assert(glFunc != nullptr);
 
 
-	float p[16];
-	float mv[16];
-	glFunc->glGetFloatv(GL_PROJECTION_MATRIX, p);
-	glFunc->glGetFloatv(GL_MODELVIEW_MATRIX, mv);
+	/*
+	float mv_f[16];
+	float proj_f[16];
+	
+	glFunc->glGetFloatv(GL_PROJECTION_MATRIX, proj_f);
+	glFunc->glGetFloatv(GL_MODELVIEW_MATRIX, mv_f);
+	*/
 
+	/*
 	for (int i = 0; i < 16; i++) {
-		ccLog::PrintDebug(QString("[%1] mv: %2, p: %3").arg(i).arg(mv[i]).arg(p[i]));
+		ccLog::PrintDebug(QString("[%1] mv: %2, p: %3").arg(i).arg(mv_f[i]).arg(proj_f[i]));
 	}
+	*/
+
+
+
+
+
+	
+	ccLog::PrintDebug("drawMeOnly_test");
+
+	
+
+	if (!arrayBuf.isCreated()) {
+
+		ccLog::PrintDebug("create array buf");
+		arrayBuf.create();
+
+		GLfloat vertices[] =
+		{
+			-1.0f, -1.0f , 0.0f,
+			-1.0f,  1.0f , 0.0f,
+			 1.0f,  1.0f , 0.0f,
+			 1.0f, -1.0f , 0.0f,
+		};
+
+
+		arrayBuf.bind();
+		arrayBuf.allocate(vertices, 16 * sizeof(GLfloat));
+
+
+
+	}
+	else {
+		ccLog::PrintDebug("array buf created");
+	}
+
+	if (!indexBuf) {
+		ccLog::PrintDebug("index buf does not exist");
+	}
+
+	if (!indexBuf.isCreated()) {
+
+
+		ccLog::PrintDebug("create index buf");
+		indexBuf.create();
+
+		GLushort indices[] =
+		{
+			0, 2, 1,
+			0, 3, 2
+		};
+
+
+		indexBuf.bind();
+		indexBuf.allocate(indices, 6 * sizeof(GLushort));
+
+	}
+	else {
+		ccLog::PrintDebug("index buf created");
+	}
+
+
+
+
+	ccShader* shader = context.customRenderingShader; 
+
+	if (shader) {
+		shader->bind();
+
+
+		indexBuf.bind();
+		arrayBuf.bind();
+
+
+		shader->enableAttributeArray("Pos");
+		shader->setAttributeBuffer("Pos", GL_FLOAT, 0, 3, 0);
+
+			
+		//QMatrix4x4 mat1(mv_f);
+		//QMatrix4x4 mat2(proj_f);
+
+		//shader->setUniformValue(shader->uniformLocation("ModelView"), mat1);
+		//shader->setUniformValue(shader->uniformLocation("Projection"), mat2);
+
+		ccLog::PrintDebug("draw Elements");
+
+		glFunc->glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, 0);
+
+
+		glFunc->glUseProgram(0);
+
+	}
+
+
+
+
+
+
+
+
 }
 
 void ccPointCloud::drawMeOnly_old(CC_DRAW_CONTEXT& context)
@@ -3476,6 +3581,13 @@ void ccPointCloud::drawMeOnly_new(CC_DRAW_CONTEXT& context)
 
 				m_vboManager.vbos[k]->bind();
 
+				if (context.customComputeShader) {
+					ccLog::PrintDebug("Compute shader is present");
+				}
+				else {
+					ccLog::PrintDebug("No compute shader is set");
+				}
+
 				if (context.customRenderingShader) {
 					ccLog::PrintDebug("Binding shader");
 
@@ -3540,7 +3652,7 @@ void ccPointCloud::drawMeOnly_new(CC_DRAW_CONTEXT& context)
 void ccPointCloud::drawMeOnly(CC_DRAW_CONTEXT& context)
 {
 	ccLog::PrintDebug("drawMeOnly");
-	drawMeOnly_new(context);
+	drawMeOnly_test(context);
 }
 
 void ccPointCloud::addColorRampInfo(CC_DRAW_CONTEXT& context)
