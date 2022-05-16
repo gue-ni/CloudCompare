@@ -2641,101 +2641,88 @@ void ccPointCloud::drawMeOnly_test(CC_DRAW_CONTEXT& context)
 
 
 
+	if (MACRO_Draw3D(context)) {
+		ccLog::PrintDebug("drawMeOnly_test");
+
+		if (arrayBuf == nullptr) {
+			arrayBuf = new QGLBuffer(QGLBuffer::VertexBuffer);
+		}
+
+		
+
+		if (!arrayBuf->isCreated()) {
+
+			ccLog::PrintDebug("create array buf");
+			arrayBuf->create();
+
+			/*
+			GLfloat vertices[] = {
+				-0.5f, -0.5f, 0.0f,
+				 0.5f, -0.5f, 0.0f,
+				 0.0f,  0.5f, 0.0f
+			};
+			*/
 
 
-	
-	ccLog::PrintDebug("drawMeOnly_test");
+			GLfloat vertices[] = {
+				-0.5f, -0.5f, 0.0f, // bottom left
+				 0.5f, -0.5f, 0.0f, // bottom right
+				-0.5f,  0.5f, 0.0f, // top left
 
-	
-
-	if (!arrayBuf.isCreated()) {
-
-		ccLog::PrintDebug("create array buf");
-		arrayBuf.create();
-
-		GLfloat vertices[] =
-		{
-			-1.0f, -1.0f , 0.0f,
-			-1.0f,  1.0f , 0.0f,
-			 1.0f,  1.0f , 0.0f,
-			 1.0f, -1.0f , 0.0f,
-		};
-
-
-		arrayBuf.bind();
-		arrayBuf.allocate(vertices, 16 * sizeof(GLfloat));
+				 0.5f, -0.5f, 0.0f, // bottom right
+				 0.5f,  0.5f, 0.0f, // top right
+				-0.5f,  0.5f, 0.0f, // top left
+			};
 
 
 
+			arrayBuf->bind();
+			arrayBuf->allocate(vertices, sizeof(vertices));
+			arrayBuf->setUsagePattern(QGLBuffer::DynamicDraw);
+		}
+		else {
+			ccLog::PrintDebug("array buf already created");
+		}
+
+		ccShader* shader = context.customRenderingShader; 
+
+		if (shader) {
+			shader->bind();
+
+			/*
+			if (!indexBuf.bind()) {
+				ccLog::PrintDebug("bind  index buf failed");
+			}
+			*/
+
+			if (!arrayBuf->bind()) {
+				ccLog::PrintDebug("bind array buf failed");
+			}
+
+
+			shader->enableAttributeArray("Pos");
+			shader->setAttributeBuffer("Pos", GL_FLOAT, 0, 3, 0);
+
+				
+			//QMatrix4x4 mat1(mv_f);
+			//QMatrix4x4 mat2(proj_f);
+
+			//shader->setUniformValue(shader->uniformLocation("ModelView"), mat1);
+			//shader->setUniformValue(shader->uniformLocation("Projection"), mat2);
+
+
+			glFunc->glDrawArrays(GL_TRIANGLES, 0, 6);
+
+			glFunc->glUseProgram(0);
+
+		}
+		else {
+			ccLog::PrintDebug("no shader");
+		}
 	}
 	else {
-		ccLog::PrintDebug("array buf created");
+		ccLog::PrintDebug("2d");
 	}
-
-	if (!indexBuf) {
-		ccLog::PrintDebug("index buf does not exist");
-	}
-
-	if (!indexBuf.isCreated()) {
-
-
-		ccLog::PrintDebug("create index buf");
-		indexBuf.create();
-
-		GLushort indices[] =
-		{
-			0, 2, 1,
-			0, 3, 2
-		};
-
-
-		indexBuf.bind();
-		indexBuf.allocate(indices, 6 * sizeof(GLushort));
-
-	}
-	else {
-		ccLog::PrintDebug("index buf created");
-	}
-
-
-
-
-	ccShader* shader = context.customRenderingShader; 
-
-	if (shader) {
-		shader->bind();
-
-
-		indexBuf.bind();
-		arrayBuf.bind();
-
-
-		shader->enableAttributeArray("Pos");
-		shader->setAttributeBuffer("Pos", GL_FLOAT, 0, 3, 0);
-
-			
-		//QMatrix4x4 mat1(mv_f);
-		//QMatrix4x4 mat2(proj_f);
-
-		//shader->setUniformValue(shader->uniformLocation("ModelView"), mat1);
-		//shader->setUniformValue(shader->uniformLocation("Projection"), mat2);
-
-		ccLog::PrintDebug("draw Elements");
-
-		glFunc->glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, 0);
-
-
-		glFunc->glUseProgram(0);
-
-	}
-
-
-
-
-
-
-
-
 }
 
 void ccPointCloud::drawMeOnly_old(CC_DRAW_CONTEXT& context)
