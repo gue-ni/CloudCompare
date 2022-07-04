@@ -746,6 +746,9 @@ public: //other methods
 
 	//QGLBuffer arrayBuf(QGLBuffer::VertexBuffer);
 	QGLBuffer *arrayBuf = nullptr; 
+	QGLBuffer *indexBuf = nullptr; 
+
+	GLuint texture;
 
 
 protected:
