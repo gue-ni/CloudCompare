@@ -86,8 +86,9 @@ protected:
 
 	void segmentIn();
 	void segmentOut();
-	void segment(bool);
+	void segment(bool keepPointsInside, ScalarType classificationValue = CCCoreLib::NAN_VALUE);
 	void reset();
+	void options();
 	void apply();
 	void applyAndDelete();
 	void cancel();
@@ -96,7 +97,10 @@ protected:
 	void closePolyLine(int x = 0, int y = 0); //arguments for compatibility with ccGlWindow::rightButtonClicked signal
 	void closeRectangle();
 	void updatePolyLine(int x, int y, Qt::MouseButtons buttons);
+	void run();
+	void stopRunning();
 	void pauseSegmentationMode(bool);
+	void setClassificationValue();
 	void doSetPolylineSelection();
 	void doSetRectangularSelection();
 	void doActionUseExistingPolyline();

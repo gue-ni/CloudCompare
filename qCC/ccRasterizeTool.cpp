@@ -125,7 +125,6 @@ ccRasterizeTool::ccRasterizeTool(ccGenericPointCloud* cloud, QWidget* parent)
 
 	if (m_cloud)
 	{
-		m_UI->cloudNameLabel->setText(QStringLiteral("<b>%1</b> (%2 points)").arg(m_cloud->getName(), QLocale::system().toString(m_cloud->size())));
 		if (m_cloud->hasScalarFields())
 		{
 			m_UI->interpolateSFCheckBox->setEnabled(true);
@@ -161,10 +160,8 @@ ccRasterizeTool::ccRasterizeTool(ccGenericPointCloud* cloud, QWidget* parent)
 
 	loadSettings();
 
-	updateGridInfo();
+	gridIsUpToDate(false); // will call updateGridInfo
 
-	gridIsUpToDate(false);
-	
 	resize( minimumSize() );
 }
 
@@ -198,16 +195,29 @@ bool ccRasterizeTool::showGridBoxEditor()
 {
 	if (cc2Point5DimEditor::showGridBoxEditor())
 	{
-		updateGridInfo();
 		return true;
 	}
 
 	return false;
 }
 
-void ccRasterizeTool::updateGridInfo()
+void ccRasterizeTool::updateCloudName(bool withNonEmptyCells)
+{
+	QString str = QString("<b>%1</b> (%2 points").arg(m_cloud->getName(), QLocale::system().toString(m_cloud->size()));
+
+	if (withNonEmptyCells)
+		str += QString(" - %1 non-empty cells)").arg(QLocale::system().toString(m_grid.validCellCount));
+	else
+		str += ')';
+
+	m_UI->cloudNameLabel->setText(str);
+}
+
+void ccRasterizeTool::updateGridInfo(bool withNonEmptyCells/*=false*/)
 {
 	m_UI->gridWidthLabel->setText(getGridSizeAsString());
+	
+	updateCloudName(withNonEmptyCells);
 }
 
 double ccRasterizeTool::getGridStep() const
@@ -231,6 +241,8 @@ bool ccRasterizeTool::exportAsSF(ccRasterGrid::ExportableFields field) const
 		return m_UI->generateStdDevHeightSFcheckBox->isChecked();
 	case ccRasterGrid::PER_CELL_HEIGHT_RANGE:
 		return m_UI->generateHeightRangeSFcheckBox->isChecked();
+	case ccRasterGrid::PER_CELL_MEDIAN_HEIGHT:
+		return m_UI->generateMedianHeightSFcheckBox->isChecked();
 	default:
 		assert(false);
 	};
@@ -273,8 +285,7 @@ void ccRasterizeTool::sfProjectionTypeChanged(int index)
 
 void ccRasterizeTool::projectionDirChanged(int dir)
 {
-	updateGridInfo();
-	gridIsUpToDate(false);
+	gridIsUpToDate(false); // will call updateGridInfo
 }
 
 void ccRasterizeTool::activeLayerChanged(int layerIndex, bool autoRedraw/*=true*/)
@@ -398,6 +409,8 @@ ccRasterGrid::ProjectionType ccRasterizeTool::getTypeOfProjection() const
 		return ccRasterGrid::PROJ_AVERAGE_VALUE;
 	case 2:
 		return ccRasterGrid::PROJ_MAXIMUM_VALUE;
+	case 3:
+		return ccRasterGrid::PROJ_MEDIAN_VALUE;
 	default:
 		//shouldn't be possible for this option!
 		assert(false);
@@ -421,6 +434,8 @@ ccRasterGrid::ProjectionType ccRasterizeTool::getTypeOfSFInterpolation() const
 		return ccRasterGrid::PROJ_AVERAGE_VALUE;
 	case 2:
 		return ccRasterGrid::PROJ_MAXIMUM_VALUE;
+	case 3:
+		return ccRasterGrid::PROJ_MEDIAN_VALUE;
 	default:
 		//shouldn't be possible for this option!
 		assert(false);
@@ -550,6 +565,8 @@ void ccRasterizeTool::gridIsUpToDate(bool state)
 	m_UI->updateGridPushButton->setDisabled(state);
 
 	m_UI->tabWidget->setEnabled(state);
+
+	updateGridInfo(state);
 }
 
 ccPointCloud* ccRasterizeTool::convertGridToCloud(	const std::vector<ccRasterGrid::ExportableFields>& exportedFields,
@@ -839,6 +856,8 @@ ccPointCloud* ccRasterizeTool::generateCloud(bool autoExport/*=true*/) const
 			exportedFields.push_back(ccRasterGrid::PER_CELL_HEIGHT_STD_DEV);
 		if (exportAsSF(ccRasterGrid::PER_CELL_HEIGHT_RANGE))
 			exportedFields.push_back(ccRasterGrid::PER_CELL_HEIGHT_RANGE);
+		if (exportAsSF(ccRasterGrid::PER_CELL_MEDIAN_HEIGHT))
+			exportedFields.push_back(ccRasterGrid::PER_CELL_MEDIAN_HEIGHT);
 	}
 	catch (const std::bad_alloc&)
 	{
@@ -1082,14 +1101,15 @@ bool ccRasterizeTool::ExportGeoTiff(const QString& outputFilename,
 	const unsigned char X = Z == 2 ? 0 : Z + 1;
 	const unsigned char Y = X == 2 ? 0 : X + 1;
 
-	//global shift
-	assert(gridBBox.isValid());
-	double shiftX = gridBBox.minCorner().u[X];
-	double shiftY = gridBBox.maxCorner().u[Y];
-	double shiftZ = 0.0;
-
 	double stepX = grid.gridStep;
 	double stepY = grid.gridStep;
+
+	//global shift
+	assert(gridBBox.isValid());
+	double shiftX = gridBBox.minCorner().u[X] - stepX / 2; //we will declare the raster grid as 'Pixel-is-area'!
+	double shiftY = gridBBox.maxCorner().u[Y] + stepY / 2; //we will declare the raster grid as 'Pixel-is-area'!
+	double shiftZ = 0.0;
+
 	if (originCloud)
 	{
 		const CCVector3d& shift = originCloud->getGlobalShift();

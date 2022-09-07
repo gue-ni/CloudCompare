@@ -28,7 +28,7 @@ class ccCorkDlg : public QDialog, public Ui::CorkDialog
 public:
 
 	//! Default constructor
-	explicit ccCorkDlg(QWidget* parent = 0);
+	explicit ccCorkDlg(QWidget* parent/*=nullptr*/);
 
 	//! Supported CSG operations
 	enum CSG_OPERATION { UNION, INTERSECT, DIFF, SYM_DIFF };
@@ -42,7 +42,7 @@ public:
 	//! Returns whether mesh order has been swappped or not
 	bool isSwapped() const { return m_isSwapped; }
 
-protected slots:
+protected Q_SLOTS:
 
 	void unionSelected();
 	void intersectSelected();

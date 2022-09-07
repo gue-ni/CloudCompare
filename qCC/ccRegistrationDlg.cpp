@@ -250,9 +250,11 @@ ccRegistrationDlg::ConvergenceMethod ccRegistrationDlg::getConvergenceMethod() c
 
 int ccRegistrationDlg::getTransformationFilters() const
 {
-	int filters = 0;
+	int filters = CCCoreLib::RegistrationTools::SKIP_NONE;
 	switch (rotComboBox->currentIndex())
 	{
+	case 0:
+		break;
 	case 1:
 		filters |= CCCoreLib::RegistrationTools::SKIP_RYZ;
 		break;
@@ -262,8 +264,11 @@ int ccRegistrationDlg::getTransformationFilters() const
 	case 3:
 		filters |= CCCoreLib::RegistrationTools::SKIP_RXY;
 		break;
+	case 4:
+		filters |= CCCoreLib::RegistrationTools::SKIP_ROTATION;
+		break;
 	default:
-		//nothing to do
+		assert(false);
 		break;
 	}
 
@@ -296,7 +301,7 @@ void ccRegistrationDlg::updateGUI()
 	checkBoxUseModelSFAsWeights->setEnabled(modelEntity->isKindOf(CC_TYPES::POINT_CLOUD) && modelEntity->hasDisplayedScalarField()); //only supported for clouds
 
 	useC2MSignedDistancesCheckBox->setEnabled(modelEntity->isKindOf(CC_TYPES::MESH)); //only supported if a mesh is the reference cloud
-	normalsComboBox->setEnabled(dataEntity->hasNormals() && modelEntity->hasNormals()); //only supported if both the aligned and the reference entities have normals
+	normalsComboBox->setEnabled(dataEntity->hasNormals() && modelEntity->hasNormals()); //only supported if both the to-be-aligned and the reference entities have normals
 
 	MainWindow::RefreshAllGLWindow(false);
 }

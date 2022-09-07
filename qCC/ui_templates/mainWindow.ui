@@ -148,11 +148,13 @@
      <addaction name="actionRenameSF"/>
      <addaction name="separator"/>
      <addaction name="actionAddConstantSF"/>
+     <addaction name="actionAddClassificationSF"/>
      <addaction name="actionAddIdField"/>
      <addaction name="actionExportCoordToSF"/>
      <addaction name="actionExportNormalToSF"/>
      <addaction name="actionSetSFAsCoord"/>
      <addaction name="actionInterpolateSFs"/>
+     <addaction name="actionSplitCloudUsingSF"/>
      <addaction name="actionScalarFieldArithmetic"/>
      <addaction name="separator"/>
      <addaction name="actionOpenColorScalesManager"/>
@@ -3111,7 +3113,28 @@ QTreeView::branch:open:has-children:has-siblings  {
     <string>Paste from ASCII/text data stored in the clipboard</string>
    </property>
    <property name="shortcut">
-    <string>Ctrl+P</string>
+    <string>Alt+P</string>
+   </property>
+  </action>
+  <action name="actionSplitCloudUsingSF">
+   <property name="text">
+    <string>Split cloud (integer values)</string>
+   </property>
+   <property name="toolTip">
+    <string>Split the selected cloud using the current scalar field.
+The active scalar field should have integer values.</string>
+   </property>
+  </action>
+  <action name="actionAddClassificationSF">
+   <property name="icon">
+    <iconset resource="../icons.qrc">
+     <normaloff>:/CC/images/ccAddConstSF.png</normaloff>:/CC/images/ccAddConstSF.png</iconset>
+   </property>
+   <property name="text">
+    <string>Add classification SF</string>
+   </property>
+   <property name="toolTip">
+    <string>Add classification SF (shorcut to 'Add constant SF')</string>
    </property>
   </action>
  </widget>
@@ -3128,6 +3151,7 @@ QTreeView::branch:open:has-children:has-siblings  {
   </customwidget>
  </customwidgets>
  <resources>
+  <include location="../icons.qrc"/>
   <include location="../icons.qrc"/>
  </resources>
  <connections>

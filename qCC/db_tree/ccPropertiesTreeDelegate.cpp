@@ -70,9 +70,30 @@
 #include <QSpinBox>
 #include <QStandardItemModel>
 #include <QToolButton>
+#include <QEvent>
 
 //System
 #include <cassert>
+
+class FilterMouseWheelNoFocusEvent : public QObject
+{
+public:
+	explicit FilterMouseWheelNoFocusEvent(QObject *parent)
+	{
+	}
+protected:
+	bool eventFilter(QObject* o, QEvent* e) override
+	{
+		const QWidget* widget = dynamic_cast<QWidget*>(o);
+		if (e->type() == QEvent::Wheel && widget && !widget->hasFocus())
+		{
+			e->ignore();
+			return true;
+		}
+		return QObject::eventFilter(o, e);
+	}
+};
+
 
 // Default 'None' string
 const char* ccPropertiesTreeDelegate::s_noneString = QT_TR_NOOP( "None" );
@@ -128,6 +149,7 @@ ccPropertiesTreeDelegate::ccPropertiesTreeDelegate(QStandardItemModel* model,
 	, m_currentObject(nullptr)
 	, m_model(model)
 	, m_view(view)
+	, m_lastFocusItemRole(OBJECT_NO_PROPERTY)
 {
 	assert(m_model && m_view);
 }
@@ -439,9 +461,6 @@ void ccPropertiesTreeDelegate::fillWithHObject(ccHObject* _obj)
 		appendRow(ITEM(tr("Normals")), CHECKABLE_ITEM(_obj->normalsShown(), OBJECT_NORMALS_SHOWN));
 	}
 
-	//name in 3D
-	appendRow(ITEM( tr( "Show name (in 3D)" ) ), CHECKABLE_ITEM(_obj->nameShownIn3D(), OBJECT_NAME_IN_3D));
-
 	//color source
 	if (_obj->hasColors() || _obj->hasScalarFields())
 	{
@@ -466,6 +485,9 @@ void ccPropertiesTreeDelegate::fillWithHObject(ccHObject* _obj)
 
 		if (box.isValid())
 		{
+			//name in 3D (we can't display a 3D name if the bounding-box is not valid!
+			appendRow(ITEM(tr("Show name (in 3D)")), CHECKABLE_ITEM(_obj->nameShownIn3D(), OBJECT_NAME_IN_3D));
+
 			//Box dimensions
 			CCVector3 bboxDiag = box.getDiagVec();
 			appendRow(ITEM(fitBBox ? tr( "Local box dimensions" ) : tr( "Box dimensions" )),
@@ -628,6 +650,13 @@ void ccPropertiesTreeDelegate::fillSFWithPointCloud(ccGenericPointCloud* _obj)
 		CCCoreLib::ScalarField* sf = cloud->getCurrentDisplayedScalarField();
 		if (sf)
 		{
+			//field shift
+			ccScalarField* ccSF = dynamic_cast<ccScalarField*>(sf);
+			if (ccSF)
+			{
+				appendRow(ITEM( tr( "Shift" ) ), ITEM(QString::number(ccSF->getGlobalShift(), 'f', 2)));
+			}
+
 			addSeparator("Color Scale");
 
 			//color scale selection combo box
@@ -1600,6 +1629,11 @@ QWidget* ccPropertiesTreeDelegate::createEditor(QWidget *parent,
 	if (outputWidget)
 	{
 		outputWidget->setFocusPolicy(Qt::StrongFocus); //Qt doc: << The returned editor widget should have Qt::StrongFocus >>
+		outputWidget->installEventFilter(new FilterMouseWheelNoFocusEvent(outputWidget));
+		if (m_lastFocusItemRole == itemData)
+		{
+			outputWidget->setFocus(Qt::MouseFocusReason);
+		}
 	}
 	else
 	{
@@ -1987,7 +2021,7 @@ void ccPropertiesTreeDelegate::updateItem(QStandardItem * item)
 	{
 	case OBJECT_NAME:
 		m_currentObject->setName(item->text());
-		emit ccObjectPropertiesChanged(m_currentObject);
+		Q_EMIT ccObjectPropertiesChanged(m_currentObject);
 		break;
 	case OBJECT_VISIBILITY:
 	{
@@ -1997,9 +2031,9 @@ void ccPropertiesTreeDelegate::updateItem(QStandardItem * item)
 		if (objectWasDisplayed != objectIsDisplayed)
 		{
 			if (m_currentObject->isGroup())
-				emit ccObjectAndChildrenAppearanceChanged(m_currentObject);
+				Q_EMIT ccObjectAndChildrenAppearanceChanged(m_currentObject);
 			else
-				emit ccObjectAppearanceChanged(m_currentObject);
+				Q_EMIT ccObjectAppearanceChanged(m_currentObject);
 		}
 	}
 	break;
@@ -2176,11 +2210,11 @@ void ccPropertiesTreeDelegate::updateDisplay()
 	{
 		if (object->isGroup())
 		{
-			emit ccObjectAndChildrenAppearanceChanged(m_currentObject);
+			Q_EMIT ccObjectAndChildrenAppearanceChanged(m_currentObject);
 		}
 		else
 		{
-			emit ccObjectAppearanceChanged(m_currentObject);
+			Q_EMIT ccObjectAppearanceChanged(m_currentObject);
 		}
 	}
 }
@@ -2340,6 +2374,10 @@ void ccPropertiesTreeDelegate::octreeDisplayedLevelChanged(int val)
 	{
 		octree->setDisplayedLevel(val);
 		updateDisplay();
+
+		//record item role to force the scroll focus (see 'createEditor').
+		m_lastFocusItemRole = OBJECT_OCTREE_LEVEL;
+
 		//we must also reset the properties display!
 		updateModel();
 	}
@@ -2362,6 +2400,10 @@ void ccPropertiesTreeDelegate::primitivePrecisionChanged(int val)
 		primitive->setVisible(wasVisible);
 
 		updateDisplay();
+
+		//record item role to force the scroll focus (see 'createEditor').
+		m_lastFocusItemRole = OBJECT_PRIMITIVE_PRECISION;
+
 		//we must also reset the properties display!
 		updateModel();
 	}
@@ -2385,6 +2427,10 @@ void ccPropertiesTreeDelegate::sphereRadiusChanged(double val)
 		sphere->setVisible(wasVisible);
 
 		updateDisplay();
+
+		//record item role to force the scroll focus (see 'createEditor').
+		m_lastFocusItemRole = OBJECT_SPHERE_RADIUS;
+
 		//we must also reset the properties display!
 		updateModel();
 	}
@@ -2408,6 +2454,10 @@ void ccPropertiesTreeDelegate::coneHeightChanged(double val)
 		cone->setVisible(wasVisible);
 
 		updateDisplay();
+
+		//record item role to force the scroll focus (see 'createEditor').
+		m_lastFocusItemRole = OBJECT_CONE_HEIGHT;
+
 		//we must also reset the properties display!
 		updateModel();
 	}
@@ -2431,6 +2481,10 @@ void ccPropertiesTreeDelegate::coneBottomRadiusChanged(double val)
 		cone->setVisible(wasVisible);
 
 		updateDisplay();
+
+		//record item role to force the scroll focus (see 'createEditor').
+		m_lastFocusItemRole = OBJECT_CONE_BOTTOM_RADIUS;
+
 		//we must also reset the properties display!
 		updateModel();
 	}
@@ -2454,6 +2508,10 @@ void ccPropertiesTreeDelegate::coneTopRadiusChanged(double val)
 		cone->setVisible(wasVisible);
 
 		updateDisplay();
+
+		//record item role to force the scroll focus (see 'createEditor').
+		m_lastFocusItemRole = OBJECT_CONE_TOP_RADIUS;
+
 		//we must also reset the properties display!
 		updateModel();
 	}

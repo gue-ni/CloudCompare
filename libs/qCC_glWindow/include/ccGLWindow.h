@@ -33,6 +33,7 @@
 #include <QTimer>
 
 #ifdef CC_GL_WINDOW_USE_QWINDOW
+#include <QHBoxLayout>
 #include <QWidget>
 #include <QWindow>
 #else
@@ -64,7 +65,6 @@ using ccGLWindowParent = QWindow;
 using ccGLWindowParent = QOpenGLWidget;
 #endif
 
-
 //! OpenGL 3D view
 class CCGLWINDOW_LIB_API ccGLWindow : public ccGLWindowParent, public ccGenericGLDisplay
 {
@@ -80,6 +80,7 @@ public:
 						POINT_PICKING,
 						TRIANGLE_PICKING,
 						POINT_OR_TRIANGLE_PICKING,
+						POINT_OR_TRIANGLE_OR_LABEL_PICKING,
 						LABEL_PICKING,
 						DEFAULT_PICKING,
 	};
@@ -377,6 +378,7 @@ public:
 
 	//! Sets point size
 	/** \param size point size (between MIN_POINT_SIZE_F and MAX_POINT_SIZE_F)
+		\param silent whether this function can log and/or display messages on the screen
 	**/
 	virtual void setPointSize(float size, bool silent = false);
 	
@@ -387,6 +389,7 @@ public:
 
 	//! Sets line width
 	/** \param width lines width (between MIN_LINE_WIDTH_F and MAX_LINE_WIDTH_F)
+		\param silent whether this function can log and/or display messages on the screen
 	**/
 	virtual void setLineWidth(float width, bool silent = false);
 
@@ -443,7 +446,8 @@ public:
 	
 	virtual void setShader(ccShader* shader);
 	virtual void setGlFilter(ccGlFilter* filter);
-	ccGlFilter* getGlFilter() { return m_activeGLFilter; }
+	inline ccGlFilter* getGlFilter() { return m_activeGLFilter; }
+	inline const ccGlFilter* getGlFilter() const { return m_activeGLFilter; }
 
 	virtual bool areShadersEnabled() const;
 	virtual bool areGLFiltersEnabled() const;
@@ -454,13 +458,13 @@ public:
 	virtual double computeActualPixelSize() const;
 
 	//! Returns whether the ColorRamp shader is supported or not
-	bool hasColorRampShader() const { return m_colorRampShader != nullptr; }
+	inline bool hasColorRampShader() const { return m_colorRampShader != nullptr; }
 
 	//! Returns whether rectangular picking is allowed or not
-	bool isRectangularPickingAllowed() const { return m_allowRectangularEntityPicking; }
+	inline bool isRectangularPickingAllowed() const { return m_allowRectangularEntityPicking; }
 
 	//! Sets whether rectangular picking is allowed or not
-	void setRectangularPickingAllowed(bool state) { m_allowRectangularEntityPicking = state; }
+	inline void setRectangularPickingAllowed(bool state) { m_allowRectangularEntityPicking = state; }
 
 	//! Returns current parameters for this display (const version)
 	/** Warning: may return overridden parameters!
@@ -471,7 +475,7 @@ public:
 	void setDisplayParameters(const ccGui::ParamStruct& params, bool thisWindowOnly = false);
 
 	//! Whether display parameters are overidden for this window
-	bool hasOverriddenDisplayParameters() const { return m_overriddenDisplayParametersEnabled; }
+	inline bool hasOverriddenDisplayParameters() const { return m_overriddenDisplayParametersEnabled; }
 
 	//! Default picking radius value
 	static const int DefaultPickRadius = 5;
@@ -481,11 +485,23 @@ public:
 	//! Returns the current picking radius
 	inline int getPickingRadius() const { return m_pickRadius; }
 
-	//! Sets whether overlay entities (scale, tetrahedron, etc.) should be displayed or not
-	void displayOverlayEntities(bool state) { m_displayOverlayEntities = state; }
+	//! Sets whether overlay entities (scale and trihedron) should be displayed or not
+	inline void displayOverlayEntities(bool showScale, bool showTrihedron) { m_showScale = showScale; m_showTrihedron = showTrihedron; }
 
-	//! Returns whether overlay entities (scale, tetrahedron, etc.) are displayed or not
-	bool overlayEntitiesAreDisplayed() const { return m_displayOverlayEntities; }
+	//! Returns whether the scale bar is displayed or not
+	inline bool scaleIsDisplayed() const { return m_showScale; }
+
+	//! Returns whether the trihedron is displayed or not
+	inline bool trihedronIsDisplayed() const { return m_showTrihedron; }
+
+	//! Computes the trihedron size (in pixels)
+	float computeTrihedronLength() const;
+
+	//! Returns the height of the 'GL filter' banner
+	int getGlFilterBannerHeight() const;
+
+	//! Returns the extents of the vertical area available for displaying the color ramp
+	void computeColorRampAreaLimits(int& yStart, int& yStop) const;
 
 	//! Backprojects a 2D points on a 3D triangle
 	/** \warning Uses the current display parameters!
@@ -504,18 +520,18 @@ public:
 	inline int getUniqueID() const { return m_uniqueID; }
 
 	//! Returns the widget width (in pixels)
-	int qtWidth() const { return ccGLWindow::width(); }
+	inline int qtWidth() const { return ccGLWindow::width(); }
 	//! Returns the widget height (in pixels)
-	int qtHeight() const { return ccGLWindow::height(); }
+	inline int qtHeight() const { return ccGLWindow::height(); }
 	//! Returns the widget size (in pixels)
-	QSize qtSize() const { return ccGLWindowParent::size(); }
+	inline QSize qtSize() const { return ccGLWindowParent::size(); }
 
 	//! Returns the OpenGL context width
-	int glWidth() const { return m_glViewport.width(); }
+	inline int glWidth() const { return m_glViewport.width(); }
 	//! Returns the OpenGL context height
-	int glHeight() const { return m_glViewport.height(); }
+	inline int glHeight() const { return m_glViewport.height(); }
 	//! Returns the OpenGL context size
-	QSize glSize() const { return m_glViewport.size(); }
+	inline QSize glSize() const { return m_glViewport.size(); }
 
 public: //LOD
 
@@ -598,7 +614,6 @@ public: //stereo mode
 	//! Returns whether the rotation axis is locaked or not
 	bool isRotationAxisLocked() const { return m_rotationAxisLocked; }
 
-
 public:
 
 	//! Applies a 1:1 global zoom
@@ -651,7 +666,7 @@ protected:
 	//! Performs standard picking at the last clicked mouse position (see m_lastMousePos)
 	void doPicking();
 
-signals:
+Q_SIGNALS:
 
 	//! Signal emitted when an entity is selected in the 3D view
 	void entitySelectionChanged(ccHObject* entity);
@@ -962,9 +977,6 @@ protected: //other methods
 	**/
 	CCVector3d convertMousePositionToOrientation(int x, int y);
 
-	//! Returns the height of the 'GL filter' banner
-	int getGlFilterBannerHeight() const;
-
 	//! Draws the 'hot zone' (+/- icons for point size), 'leave bubble-view' button, etc.
 	void drawClickableItems(int xStart, int& yStart);
 
@@ -999,7 +1011,6 @@ protected: //other methods
 
 		\param error GL error code
 		\param context name of the method/object that catched the error
-		\return true if an error occurred, false otherwise
 	**/
 	static void LogGLError(GLenum error, const char* context);
 
@@ -1223,8 +1234,11 @@ protected: //members
 	//! Whether display parameters are overidden for this window
 	bool m_overriddenDisplayParametersEnabled;
 
-	//! Whether to display overlay entities or not (scale, tetrahedron, etc.)
-	bool m_displayOverlayEntities;
+	//! Whether to display the scale bar
+	bool m_showScale;
+
+	//! Whether to display the trihedron
+	bool m_showTrihedron;
 
 	//! Whether initialization should be silent or not (i.e. no message to console)
 	bool m_silentInitialization;
@@ -1342,5 +1356,98 @@ protected: //members
 	//! Fast pixel reading mechanism with PBO
 	PBOPicking m_pickingPBO;
 };
+
+#ifdef CC_GL_WINDOW_USE_QWINDOW
+
+//! Container widget for ccGLWindow
+class CCGLWINDOW_LIB_API ccGLWidget : public QWidget
+{
+	Q_OBJECT
+
+public:
+
+	ccGLWidget(ccGLWindow* window, QWidget* parent = nullptr)
+		: QWidget(parent)
+	{
+		setLayout(new QHBoxLayout);
+		layout()->setContentsMargins(0, 0, 0, 0);
+
+		if (window)
+		{
+			setAssociatedWindow(window);
+		}
+	}
+
+	virtual ~ccGLWidget()
+	{
+		if (m_associatedWindow)
+		{
+			m_associatedWindow->setParent(nullptr);
+			m_associatedWindow->close();
+		}
+	}
+
+	inline ccGLWindow* associatedWindow() const { return m_associatedWindow; }
+
+	void setAssociatedWindow(ccGLWindow* window)
+	{
+		if (window)
+		{
+			assert(layout() && layout()->count() == 0);
+			QWidget* container = QWidget::createWindowContainer(window, this);
+			layout()->addWidget(container);
+
+			m_associatedWindow = window;
+			m_associatedWindow->setParentWidget(container);
+		}
+		else
+		{
+			assert(false);
+		}
+	}
+
+protected:
+
+	ccGLWindow* m_associatedWindow;
+};
+
+#endif
+
+inline void CreateGLWindow(ccGLWindow*& window, QWidget*& widget, bool stereoMode = false, bool silentInitialization = false)
+{
+	QSurfaceFormat format = QSurfaceFormat::defaultFormat();
+	format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
+	format.setStereo(stereoMode);
+
+	window = new ccGLWindow(&format, nullptr, silentInitialization);
+
+#ifdef CC_GL_WINDOW_USE_QWINDOW
+	widget = new ccGLWidget(window);
+#else
+	widget = window;
+#endif
+}
+
+inline ccGLWindow* GLWindowFromWidget(QWidget* widget)
+{
+#ifdef CC_GL_WINDOW_USE_QWINDOW
+	ccGLWidget* myWidget = qobject_cast<ccGLWidget*>(widget);
+	if (myWidget)
+	{
+		return myWidget->associatedWindow();
+	}
+#else
+	ccGLWindow* myWidget = qobject_cast<ccGLWindow*>(widget);
+	if (myWidget)
+	{
+		return myWidget;
+	}
+#endif
+	else
+	{
+		assert(false);
+		return nullptr;
+	}
+}
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(ccGLWindow::INTERACTION_FLAGS);

@@ -133,13 +133,11 @@ void ccClippingBoxTool::editBox()
 	}
 
 
-	ccBoundingBoxEditorDlg bbeDlg(this);
+	ccBoundingBoxEditorDlg bbeDlg(true, false, this); //show the box 'axes' (orientation)
 	bbeDlg.setBaseBBox(box, false);
 	bbeDlg.showInclusionWarning(false);
 	bbeDlg.setWindowTitle("Edit clipping box");
 	
-	//show the box 'axes' (orientation)
-	bbeDlg.showBoxAxes(true);
 	//transformation.invert();
 	bbeDlg.setBoxAxes(	transformation.getColumnAsVec3D(0),
 						transformation.getColumnAsVec3D(1),
@@ -565,7 +563,7 @@ bool ccClippingBoxTool::ExtractSlicesAndContours
 	bool projectOnBestFitPlane/*=false*/,
 	bool visualDebugMode/*=false*/,
 	bool generateRandomColors/*=false*/,
-	ccProgressDialog* progressDialog/*=0*/)
+	ccProgressDialog* progressDialog/*=nullptr*/)
 {
 	//check input
 	if (clouds.empty() && meshes.empty())
@@ -891,7 +889,7 @@ bool ccClippingBoxTool::ExtractSlicesAndContours
 							int sliceIndex = ((k - indexMins[2]) * static_cast<int>(gridDim[1]) + (j - indexMins[1])) * static_cast<int>(gridDim[0]) + (i - indexMins[0]);
 
 							CCVector3 C = gridOrigin + CCVector3(i*cellSizePlusGap.x, j*cellSizePlusGap.y, k*cellSizePlusGap.z);
-							ccBBox cropBox(C, C + cellSize);
+							ccBBox cropBox(C, C + cellSize, true);
 
 							for (size_t mi = 0; mi != meshes.size(); ++mi)
 							{

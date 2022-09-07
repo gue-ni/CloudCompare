@@ -99,13 +99,12 @@ bool CSF::readPointsFromFile(std::string filename)
 	return true;
 }
 
-//CSFÖ÷³ÌÐò dofiltering
-bool CSF::do_filtering(	std::vector<int>& groundIndexes,
-						std::vector<int>& offGroundIndexes,
+bool CSF::do_filtering(	std::vector<unsigned>& groundIndexes,
+						std::vector<unsigned>& offGroundIndexes,
 						bool exportClothMesh,
 						ccMesh* &clothMesh,
-						ccMainAppInterface* app/*=0*/,
-						QWidget* parent/*=0*/)
+						ccMainAppInterface* app/*=nullptr*/,
+						QWidget* parent/*=nullptr*/)
 {
 	//constants
 	static const double cloth_y_height = 0.05; //origin cloth height
@@ -161,7 +160,7 @@ bool CSF::do_filtering(	std::vector<int>& groundIndexes,
 		//do the filtering
 		QProgressDialog pDlg(parent);
 		pDlg.setWindowTitle("CSF");
-		pDlg.setLabelText(QString("Cloth deformation\n%1 x %2 particles").arg(cloth.num_particles_width).arg(cloth.num_particles_height));
+		pDlg.setLabelText(QObject::tr("Cloth deformation\n%1 x %2 particles").arg(cloth.num_particles_width).arg(cloth.num_particles_height));
 		pDlg.setRange(0, params.iterations);
 		pDlg.show();
 		QCoreApplication::processEvents();
@@ -240,7 +239,6 @@ bool CSF::do_filtering(	std::vector<int>& groundIndexes,
 	}
 }
 
-//Exporting the ground points to file.
 void CSF::saveGroundPoints(const std::vector<int>& grp, std::string path)
 {
 	std::string filepath = "terr_ground.txt";

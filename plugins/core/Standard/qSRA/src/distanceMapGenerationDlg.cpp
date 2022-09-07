@@ -99,7 +99,7 @@ static double ConvertAngleToRad(double angle, DistanceMapGenerationDlg::ANGULAR_
 	return 0.0;
 }
 
-DistanceMapGenerationDlg::DistanceMapGenerationDlg(ccPointCloud* cloud, ccScalarField* sf, ccPolyline* polyline, ccMainAppInterface* app/*=0*/)
+DistanceMapGenerationDlg::DistanceMapGenerationDlg(ccPointCloud* cloud, ccScalarField* sf, ccPolyline* polyline, ccMainAppInterface* app/*=nullptr*/)
 	: QDialog(app ? app->getMainWindow() : nullptr)
 	, m_app(app)
 	, m_cloud(cloud)
@@ -225,7 +225,7 @@ DistanceMapGenerationDlg::DistanceMapGenerationDlg(ccPointCloud* cloud, ccScalar
 		m_window->setDisplayParameters(params,true);
 		m_window->setPerspectiveState(false,true);
 		m_window->setInteractionMode(ccGLWindow::INTERACT_PAN | ccGLWindow::INTERACT_CLICKABLE_ITEMS | ccGLWindow::INTERACT_ZOOM_CAMERA);
-		m_window->displayOverlayEntities(false);
+		m_window->displayOverlayEntities(false, false);
 		m_window->showSF(displayColorScaleCheckBox->isChecked());
 		m_window->setSunLight(true);
 		m_window->setCustomLight(false);
@@ -330,10 +330,8 @@ void DistanceMapGenerationDlg::closeEvent(QCloseEvent* e)
 		//and the OpenGL context won't be valid anymore to unload the map texture
 		m_window->getOwnDB()->removeAllChildren();
 	}
-	if (e)
-	{
-		e->accept();
-	}
+
+	QDialog::closeEvent(e);
 }
 
 void DistanceMapGenerationDlg::updateMinAndMaxLimits()
@@ -779,18 +777,18 @@ void DistanceMapGenerationDlg::updateMapTexture()
 	if (mode == PROJ_CYLINDRICAL)
 	{
 		//cylindrical projection: look for a plane
-		if (m_window->getOwnDB()->filterChildren(texturedEntities,false,CC_TYPES::PLANE) == 0)
+		if (m_window->getOwnDB()->filterChildren(texturedEntities, false, CC_TYPES::PLANE) == 0)
 			return;
 	}
 	else if (mode == PROJ_CONICAL)
 	{
 		//conical projection: look for a standard mesh
-		if (m_window->getOwnDB()->filterChildren(texturedEntities,false,CC_TYPES::MESH) == 0)
+		if (m_window->getOwnDB()->filterChildren(texturedEntities, false, CC_TYPES::MESH) == 0)
 			return;
 	}
 
 	//spawn "update" dialog
-	QProgressDialog progressDlg(QString("Updating..."),nullptr,0,0,nullptr,Qt::Popup);
+	QProgressDialog progressDlg(tr("Updating..."), QString(), 0, 0, nullptr, Qt::Popup);
 	progressDlg.setMinimumDuration(0);
 	progressDlg.setModal(true);
 	progressDlg.show();
@@ -801,7 +799,7 @@ void DistanceMapGenerationDlg::updateMapTexture()
 	if (!colorScale)
 	{
 		if (m_app)
-			m_app->dispToConsole(QString("No color scale chosen!"),ccMainAppInterface::ERR_CONSOLE_MESSAGE);
+			m_app->dispToConsole(QString("No color scale chosen!"), ccMainAppInterface::ERR_CONSOLE_MESSAGE);
 		return;
 	}
 
@@ -810,7 +808,7 @@ void DistanceMapGenerationDlg::updateMapTexture()
 	if (mapImage.isNull())
 	{
 		if (m_app)
-			m_app->dispToConsole(QString("Failed to create map texture! Not enough memory?"),ccMainAppInterface::ERR_CONSOLE_MESSAGE);
+			m_app->dispToConsole(QString("Failed to create map texture! Not enough memory?"), ccMainAppInterface::ERR_CONSOLE_MESSAGE);
 		return;
 	}
 

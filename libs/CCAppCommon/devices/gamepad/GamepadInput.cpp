@@ -9,7 +9,7 @@
 //system
 #include <assert.h>
 
-GamepadInput::GamepadInput(QObject* parent/*=0*/)
+GamepadInput::GamepadInput(QObject* parent/*=nullptr*/)
 	: QGamepad(0, parent)
 	, m_hasPanning(false)
 	, m_hasRotation(false)
@@ -164,6 +164,6 @@ void GamepadInput::updateInternalState()
 
 	if (m_hasRotation || m_hasPanning || m_hasTranslation || m_zoom != 0)
 	{
-		emit updated();
+		Q_EMIT updated();
 	}
 }

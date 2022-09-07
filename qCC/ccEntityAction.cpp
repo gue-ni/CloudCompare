@@ -27,6 +27,7 @@
 #include <ScalarFieldTools.h>
 #include <StatisticalTestingTools.h>
 #include <WeibullDistribution.h>
+#include <ReferenceCloud.h>
 
 //qCC_db
 #include "ccColorScalesManager.h"
@@ -96,12 +97,15 @@ namespace ccEntityAction
 	
 	//////////
 	// Colours
-	bool setColor(ccHObject::Container selectedEntities, bool colorize, QWidget *parent)
+	bool setColor(ccHObject::Container selectedEntities, bool colorize, QWidget* parent)
 	{
-		QColor colour = QColorDialog::getColor(Qt::white, parent, QString(), QColorDialog::ShowAlphaChannel);
+		static QColor s_lastColor = Qt::white;
+		QColor colour = QColorDialog::getColor(s_lastColor, parent, QString(), QColorDialog::ShowAlphaChannel);
 		
 		if (!colour.isValid())
 			return false;
+
+		s_lastColor = colour;
 		
 		while (!selectedEntities.empty())
 		{
@@ -224,7 +228,7 @@ namespace ccEntityAction
 		return true;
 	}
 	
-	bool setColorGradient(const ccHObject::Container &selectedEntities, QWidget *parent)
+	bool setColorGradient(const ccHObject::Container &selectedEntities, QWidget* parent)
 	{	
 		ccColorGradientDlg dlg(parent);
 		if (!dlg.exec())
@@ -255,7 +259,7 @@ namespace ccEntityAction
 		for (ccHObject* ent : selectedEntities)
 		{
 			bool lockedVertices = false;
-			ccGenericPointCloud* cloud = ccHObjectCaster::ToGenericPointCloud(ent,&lockedVertices);
+			ccGenericPointCloud* cloud = ccHObjectCaster::ToGenericPointCloud(ent, &lockedVertices);
 			if (lockedVertices)
 			{
 				ccUtils::DisplayLockedVerticesWarning(ent->getName(), selectedEntities.size() == 1);
@@ -284,7 +288,7 @@ namespace ccEntityAction
 		return true;
 	}
 	
-	bool	changeColorLevels(const ccHObject::Container &selectedEntities, QWidget *parent)
+	bool	changeColorLevels(const ccHObject::Container &selectedEntities, QWidget* parent)
 	{
 		if (selectedEntities.size() != 1)
 		{
@@ -314,7 +318,7 @@ namespace ccEntityAction
 	}
 	
 	//! Interpolate colors from on entity and transfer them to another one
-	bool	interpolateColors(const ccHObject::Container &selectedEntities, QWidget *parent)
+	bool	interpolateColors(const ccHObject::Container &selectedEntities, QWidget* parent)
 	{
 		if (selectedEntities.size() != 2)
 		{
@@ -378,7 +382,7 @@ namespace ccEntityAction
 		return true;
 	}
 
-	//! Interpolate scalar fields from on entity and transfer them to another one
+    //! Interpolate scalar fields from one entity and transfer them to another one
 	bool	interpolateSFs(const ccHObject::Container &selectedEntities, ccMainAppInterface* app)
 	{
 		if (selectedEntities.size() != 2)
@@ -512,7 +516,59 @@ namespace ccEntityAction
 		return true;
 	}
 	
-	bool	convertTextureToColor(const ccHObject::Container& selectedEntities, QWidget *parent)
+    //! Interpolate scalar fields from one entity and transfer them to another one without the dialog
+    bool	interpolateSFs(ccPointCloud *source, ccPointCloud *dest, int sfIndex, QWidget* parent)
+    {
+        if (!source || !dest)
+        {
+            ccConsole::Error(QObject::tr("Unexpected null cloud pointers!"));
+            return false;
+        }
+
+        if (!source->hasScalarFields())
+        {
+            ccConsole::Error(QObject::tr("[ccEntityAction::interpolateSFs] The source cloud has no scalar field!"));
+            return false;
+        }
+
+        unsigned sfCount = source->getNumberOfScalarFields();
+        if (sfIndex > static_cast<int>(sfCount))
+        {
+            ccConsole::Error(QObject::tr("[ccEntityAction::interpolateSFs] Invalid scalar field index!"));
+            return false;
+        }
+
+        std::vector<int> sfIndexes(1);
+        sfIndexes.back() = sfIndex;
+
+        //semi-persistent parameters
+        static ccPointCloudInterpolator::Parameters::Method s_interpMethod = ccPointCloudInterpolator::Parameters::NEAREST_NEIGHBOR;
+        static ccPointCloudInterpolator::Parameters::Algo s_interpAlgo = ccPointCloudInterpolator::Parameters::NORMAL_DIST;
+        static int s_interpKNN = 6;
+
+        ccInterpolationDlg iDlg(parent);
+        iDlg.setInterpolationMethod(s_interpMethod);
+        iDlg.setInterpolationAlgorithm(s_interpAlgo);
+        iDlg.knnSpinBox->setValue(s_interpKNN);
+        iDlg.radiusDoubleSpinBox->setValue(dest->getOwnBB().getDiagNormd() / 100);
+
+        //setup parameters
+        ccPointCloudInterpolator::Parameters params;
+        params.method = s_interpMethod = iDlg.getInterpolationMethod();
+        params.algo = s_interpAlgo = iDlg.getInterpolationAlgorithm();
+        params.knn = s_interpKNN = iDlg.knnSpinBox->value();
+        params.radius = iDlg.radiusDoubleSpinBox->value();
+        params.sigma = iDlg.kernelDoubleSpinBox->value();
+
+        ccProgressDialog pDlg(true, parent);
+
+        if (!ccPointCloudInterpolator::InterpolateScalarFieldsFrom(dest, source, sfIndexes, params, &pDlg))
+            ccConsole::Error(QObject::tr("[ccEntityAction::interpolateSFs] An error occurred! (see console)"));
+
+        return true;
+    }
+
+	bool	convertTextureToColor(const ccHObject::Container& selectedEntities, QWidget* parent)
 	{	
 		for (ccHObject* ent : selectedEntities)
 		{
@@ -556,7 +612,7 @@ namespace ccEntityAction
 		return true;
 	}
 
-	bool	enhanceRGBWithIntensities(const ccHObject::Container& selectedEntities, QWidget *parent)
+	bool	enhanceRGBWithIntensities(const ccHObject::Container& selectedEntities, QWidget* parent)
 	{
 		QString defaultSFName("Intensity");
 
@@ -656,7 +712,7 @@ namespace ccEntityAction
 	//////////
 	// Scalar Fields
 	
-	bool sfGaussianFilter(const ccHObject::Container &selectedEntities, QWidget *parent)
+	bool sfGaussianFilter(const ccHObject::Container &selectedEntities, QWidget* parent)
 	{
 		if (selectedEntities.empty())
 			return false;
@@ -760,7 +816,7 @@ namespace ccEntityAction
 		return true;
 	}
 	
-	bool	sfBilateralFilter(const ccHObject::Container &selectedEntities, QWidget *parent)
+	bool	sfBilateralFilter(const ccHObject::Container &selectedEntities, QWidget* parent)
 	{
 		if (selectedEntities.empty())
 			return false;
@@ -876,7 +932,7 @@ namespace ccEntityAction
 		return true;
 	}
 	
-	bool sfConvertToRGB(const ccHObject::Container &selectedEntities, QWidget *parent)
+	bool sfConvertToRGB(const ccHObject::Container &selectedEntities, QWidget* parent)
 	{
 		//we first ask the user if the SF colors should be mixed with existing colors
 		bool mixWithExistingColors = false;
@@ -922,7 +978,7 @@ namespace ccEntityAction
 		return true;
 	}
 	
-	bool	sfConvertToRandomRGB(const ccHObject::Container &selectedEntities, QWidget *parent)
+	bool	sfConvertToRandomRGB(const ccHObject::Container &selectedEntities, QWidget* parent)
 	{
 		static int s_randomColorsNumber = 256;
 		
@@ -1008,7 +1064,7 @@ namespace ccEntityAction
 		return true;
 	}
 	
-	bool sfRename(const ccHObject::Container &selectedEntities, QWidget *parent)
+	bool sfRename(const ccHObject::Container &selectedEntities, QWidget* parent)
 	{
 		for (ccHObject* ent : selectedEntities)
 		{
@@ -1078,7 +1134,182 @@ namespace ccEntityAction
 		return true;
 	}
 	
-	bool	sfSetAsCoord(const ccHObject::Container &selectedEntities, QWidget *parent)
+	bool sfAddConstant(ccPointCloud* cloud, QString sfName, bool integerValue, QWidget* parent)
+	{
+		if (!cloud)
+		{
+			assert(false);
+			return false;
+		}
+
+		if (sfName.isNull())
+		{
+			ccLog::Error(QT_TR_NOOP("Invalid name"));
+			return false;
+		}
+
+		if (cloud->getScalarFieldIndexByName(qPrintable(sfName)) >= 0)
+		{
+			ccLog::Error(QT_TR_NOOP("A SF with a similar name already exists!"));
+			return false;
+		}
+
+		ScalarType sfValue = 0;
+		bool ok = false;
+		if (integerValue)
+		{
+			static int s_constantIntSFValue = 0;
+			int iValue = QInputDialog::getInt(parent, QT_TR_NOOP("Add classification SF"), QT_TR_NOOP("value"), s_constantIntSFValue, -1000000, 1000000, 1, &ok);
+			if (ok)
+			{
+				s_constantIntSFValue = iValue;
+				sfValue = static_cast<ScalarType>(iValue);
+			}
+		}
+		else
+		{
+			static double s_constantDoubleSFValue = 0.0;
+			double dValue = static_cast<ScalarType>(QInputDialog::getDouble(parent, QT_TR_NOOP("Add constant value"), QT_TR_NOOP("value"), s_constantDoubleSFValue, -1.0e9, 1.0e9, 8, &ok));
+			if (ok)
+			{
+				s_constantDoubleSFValue = dValue;
+				sfValue = static_cast<ScalarType>(dValue);
+			}
+		}
+
+		if (!ok)
+		{
+			// cancelled by the user
+			return false;
+		}
+
+		int sfIdx = cloud->getScalarFieldIndexByName(qPrintable(sfName));
+		if (sfIdx < 0)
+			sfIdx = cloud->addScalarField(qPrintable(sfName));
+		if (sfIdx < 0)
+		{
+			ccLog::Error(QT_TR_NOOP("An error occurred! (see console)"));
+			return false;
+		}
+
+		CCCoreLib::ScalarField* sf = cloud->getScalarField(sfIdx);
+		assert(sf);
+		if (!sf)
+		{
+			assert(false);
+			return false;
+		}
+		
+		sf->fill(sfValue);
+		sf->computeMinAndMax();
+		cloud->setCurrentDisplayedScalarField(sfIdx);
+		cloud->showSF(true);
+
+		ccLog::Print(QObject::tr("New scalar field '%1' added to %2 (value = %3)").arg(sfName).arg(cloud->getName()).arg(sfValue));
+
+		return true;
+	}
+
+    bool sfSplitCloud(const ccHObject::Container& selectedEntities, ccMainAppInterface* app)
+    {
+		bool tooManyCloudsQuestionAsked = false;
+
+        for (ccHObject* ent : selectedEntities)
+        {
+            ccPointCloud* cloud = ccHObjectCaster::ToPointCloud(ent);
+			if (!cloud)
+			{
+				continue;
+			}
+            
+			ccScalarField* sf = cloud->getCurrentDisplayedScalarField();
+			if (sf == nullptr)
+			{
+				ccLog::Warning(QString("Cloud %1 has no active scalar field").arg(cloud->getName()));
+				return false;
+			}
+
+            // count integer values
+            size_t N = sf->size();
+            std::set<int> classes;
+            for (ScalarType sfValue : *sf)
+            {
+				classes.insert(static_cast<int>(sfValue));
+            }
+            ccLog::Print("[sfSplitCloud] " + QString::number(classes.size()) + " classe(s) found in the current scalar field");
+
+			if (classes.size() == 1)
+			{
+				ccLog::Warning(QString("[sfSplitCloud] Cloud %1: SF has only one value").arg(cloud->getName()));
+				continue;
+			}
+
+			if (classes.size() > 30 && app && app->getMainWindow() && !tooManyCloudsQuestionAsked) // only in GUI mode
+			{
+				// ask the user if creating this many clouds is expected
+				if (QMessageBox::No == QMessageBox::question(app->getMainWindow(), "Too many values", QString("Do you confirm that you want to create %1 clouds").arg(classes.size()), QMessageBox::Yes, QMessageBox::No))
+				{
+					ccLog::Warning("[sfSplitCloud] Process cancelled by the user");
+					return false;
+				}
+				tooManyCloudsQuestionAsked = true;
+			}
+
+			ccHObject* destObject = new ccHObject(cloud->getName() + " classes");
+			if (cloud->getParent())
+			{
+				cloud->getParent()->addChild(destObject);
+			}
+            
+			// create as many clouds as the number of classes
+			for (int pointClass : classes)
+            {
+                ccLog::Print("[sfSplitCloud] build cloud corresponding to class #" + QString::number(pointClass));
+                
+				try
+				{
+					// create the reference cloud
+					CCCoreLib::ReferenceCloud referenceCloud(cloud);
+					
+					// populate the cloud with the points which have the selected class
+					for (unsigned index = 0; index < static_cast<unsigned>(cloud->size()); index++)
+					{
+						if (static_cast<int>(sf->at(index)) == pointClass)
+						{
+							referenceCloud.addPointIndex(index);
+						}
+					}
+					ccPointCloud* pc = cloud->partialClone(&referenceCloud);
+					if (pc)
+					{
+						pc->setName("class #" + QString::number(pointClass));
+						destObject->addChild(pc);
+					}
+					else
+					{
+						ccLog::Warning("[sfSplitCloud] Failed to create cloud");
+					}
+				}
+				catch (const std::bad_alloc&)
+				{
+					delete destObject;
+					destObject = nullptr;
+					ccLog::Error(QT_TR_NOOP("Not enough memory"));
+					return false;
+				}
+			}
+		
+			// add to database
+			app->addToDB(destObject);
+
+			cloud->setEnabled(false);
+			cloud->prepareDisplayForRefresh();
+		}
+
+        return true;
+    }
+
+	bool	sfSetAsCoord(const ccHObject::Container &selectedEntities, QWidget* parent)
 	{
 		ccExportCoordToSFDlg ectsDlg(parent);
 		ectsDlg.warningLabel->setVisible(false);
@@ -1258,7 +1489,7 @@ namespace ccEntityAction
 		return true;
 	}
 
-	bool	sfArithmetic(const ccHObject::Container &selectedEntities, QWidget *parent)
+	bool	sfArithmetic(const ccHObject::Container &selectedEntities, QWidget* parent)
 	{
 		Q_ASSERT(!selectedEntities.empty());
 		
@@ -1293,7 +1524,7 @@ namespace ccEntityAction
 		return true;
 	}
 
-	bool	sfFromColor(const ccHObject::Container &selectedEntities, QWidget *parent)
+	bool	sfFromColor(const ccHObject::Container &selectedEntities, QWidget* parent)
 	{
 		ccScalarFieldFromColorDlg dialog(parent);
 		if (!dialog.exec())
@@ -1409,7 +1640,7 @@ namespace ccEntityAction
 		return true;
 	}
 	
-	bool	processMeshSF(const ccHObject::Container &selectedEntities, ccMesh::MESH_SCALAR_FIELD_PROCESS process, QWidget *parent)
+	bool	processMeshSF(const ccHObject::Container &selectedEntities, ccMesh::MESH_SCALAR_FIELD_PROCESS process, QWidget* parent)
 	{
 		for (ccHObject* ent : selectedEntities)
 		{
@@ -1450,7 +1681,7 @@ namespace ccEntityAction
 	//////////
 	// Normals
 	
-	bool	computeNormals(const ccHObject::Container &selectedEntities, QWidget *parent)
+	bool	computeNormals(const ccHObject::Container &selectedEntities, QWidget* parent)
 	{
 		if (selectedEntities.empty())
 		{
@@ -1768,7 +1999,7 @@ namespace ccEntityAction
 		return true;
 	}
 	
-	bool	orientNormalsFM(const ccHObject::Container &selectedEntities, QWidget *parent)
+	bool	orientNormalsFM(const ccHObject::Container &selectedEntities, QWidget* parent)
 	{
 		if (selectedEntities.empty())
 		{
@@ -2015,7 +2246,7 @@ namespace ccEntityAction
 	//////////
 	// Octree
 
-	bool computeOctree(const ccHObject::Container &selectedEntities, QWidget *parent)
+	bool computeOctree(const ccHObject::Container &selectedEntities, QWidget* parent)
 	{
 		ccBBox bbox;
 		std::unordered_set<ccGenericPointCloud*> clouds;
@@ -2096,9 +2327,11 @@ namespace ccEntityAction
 				{
 					double cellSize = coDlg.getMinCellSize();
 					PointCoordinateType halfBoxWidth = static_cast<PointCoordinateType>(cellSize * (1 << ccOctree::MAX_OCTREE_LEVEL) / 2.0);
-					CCVector3 C = cloud->getOwnBB().getCenter();
+					ccBBox bbBox = cloud->getOwnBB();
+					CCVector3 C = bbBox.getCenter();
 					bbox = ccBBox(	C - CCVector3(halfBoxWidth, halfBoxWidth, halfBoxWidth),
-									C + CCVector3(halfBoxWidth, halfBoxWidth, halfBoxWidth));
+									C + CCVector3(halfBoxWidth, halfBoxWidth, halfBoxWidth),
+									bbBox.isValid() );
 				}
 				cloud->deleteOctree();
 				octree = ccOctree::Shared(new ccOctree(cloud));
@@ -2145,7 +2378,7 @@ namespace ccEntityAction
 	//////////
 	// Properties
 	
-	bool	clearProperty(ccHObject::Container selectedEntities, CLEAR_PROPERTY property, QWidget *parent)
+	bool	clearProperty(ccHObject::Container selectedEntities, CLEAR_PROPERTY property, QWidget* parent)
 	{	
 		for (ccHObject* ent : selectedEntities)
 		{
@@ -2290,7 +2523,7 @@ namespace ccEntityAction
 	//////////
 	// Stats
 	
-	bool	statisticalTest(const ccHObject::Container &selectedEntities, QWidget *parent)
+	bool	statisticalTest(const ccHObject::Container &selectedEntities, QWidget* parent)
 	{
 		ccPickOneElementDlg poeDlg(QObject::tr("Distribution"), QObject::tr("Choose distribution"), parent);
 		poeDlg.addElement("Gauss");
@@ -2434,7 +2667,7 @@ namespace ccEntityAction
 		return true;
 	}
 	
-	bool	computeStatParams(const ccHObject::Container &selectedEntities, QWidget *parent)
+	bool	computeStatParams(const ccHObject::Container &selectedEntities, QWidget* parent)
 	{
 		ccPickOneElementDlg pDlg(QObject::tr("Distribution"), QObject::tr("Distribution Fitting"), parent);
 		pDlg.addElement("Gauss");

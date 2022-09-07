@@ -43,7 +43,7 @@
 //Gui
 #include "ui_histogramDlg.h"
 
-ccHistogramWindow::ccHistogramWindow(QWidget* parent/*=0*/)
+ccHistogramWindow::ccHistogramWindow(QWidget* parent/*=nullptr*/)
 	: QCustomPlot(parent)
 	, m_titlePlot(nullptr)
 	, m_colorScheme(USE_SOLID_COLOR)
@@ -658,7 +658,7 @@ void ccHistogramWindow::setMinDispValue(double val)
 			replot();
 		}
 
-		emit sfMinDispValChanged(val);
+		Q_EMIT sfMinDispValChanged(val);
 	}
 }
 
@@ -680,7 +680,7 @@ void ccHistogramWindow::setMaxDispValue(double val)
 			replot();
 		}
 
-		emit sfMaxDispValChanged(val);
+		Q_EMIT sfMaxDispValChanged(val);
 	}
 }
 
@@ -702,7 +702,7 @@ void ccHistogramWindow::setMinSatValue(double val)
 			replot();
 		}
 
-		emit sfMinSatValChanged(val);
+		Q_EMIT sfMinSatValChanged(val);
 	}
 }
 
@@ -724,7 +724,7 @@ void ccHistogramWindow::setMaxSatValue(double val)
 			replot();
 		}
 
-		emit sfMaxSatValChanged(val);
+		Q_EMIT sfMaxSatValChanged(val);
 	}
 }
 
@@ -946,7 +946,7 @@ void ccHistogramWindow::wheelEvent(QWheelEvent* e)
 	e->accept();
 }
 
-ccHistogramWindowDlg::ccHistogramWindowDlg(QWidget* parent/*=0*/)
+ccHistogramWindowDlg::ccHistogramWindowDlg(QWidget* parent/*=nullptr*/)
 	: QDialog(parent, Qt::WindowMaximizeButtonHint | Qt::WindowCloseButtonHint)
 	, m_win(new ccHistogramWindow(this))
 	, m_gui(new Ui_HistogramDialog)

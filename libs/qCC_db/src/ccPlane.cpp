@@ -29,7 +29,7 @@
 #include "Neighbourhood.h"
 
 
-ccPlane::ccPlane(PointCoordinateType xWidth, PointCoordinateType yWidth, const ccGLMatrix* transMat/*=0*/, QString name/*=QString("Plane")*/)
+ccPlane::ccPlane(PointCoordinateType xWidth, PointCoordinateType yWidth, const ccGLMatrix* transMat/*=nullptr*/, QString name/*=QString("Plane")*/)
 	: ccGenericPrimitive(name, transMat)
 	, m_xWidth(xWidth)
 	, m_yWidth(yWidth)
@@ -110,7 +110,7 @@ const PointCoordinateType* ccPlane::getEquation()
 	return m_PlaneEquation;
 }
 
-ccPlane* ccPlane::Fit(CCCoreLib::GenericIndexedCloudPersist *cloud, double* rms/*=0*/)
+ccPlane* ccPlane::Fit(CCCoreLib::GenericIndexedCloudPersist *cloud, double* rms/*=nullptr*/)
 {
 	//number of points
 	unsigned count = cloud->size();
@@ -215,7 +215,7 @@ bool ccPlane::fromFile_MeOnly(QFile& in, short dataVersion, int flags, LoadedIDM
 ccBBox ccPlane::getOwnFitBB(ccGLMatrix& trans)
 {
 	trans = m_transformation;
-	return ccBBox(CCVector3(-m_xWidth / 2, -m_yWidth / 2, 0), CCVector3(m_xWidth / 2, m_yWidth / 2, 0));
+	return ccBBox(CCVector3(-m_xWidth / 2, -m_yWidth / 2, 0), CCVector3(m_xWidth / 2, m_yWidth / 2, 0), true);
 }
 
 ccMaterial::Shared ccPlane::setAsTexture(QImage image, QString imageFilename/*=QString()*/)

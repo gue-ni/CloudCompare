@@ -23,11 +23,15 @@
 #include <QProgressBar>
 
 ccProgressDialog::ccProgressDialog(	bool showCancelButton,
-									QWidget *parent/*=0*/ )
+									QWidget* parent/*=nullptr*/ )
 	: QProgressDialog(parent)
 	, m_currentValue(0)
 	, m_lastRefreshValue(-1)
 {
+	// Make sure the dialog doesn't steal focus
+	setAttribute(Qt::WA_ShowWithoutActivating);
+	setWindowFlag(Qt::WindowDoesNotAcceptFocus);
+	
 	setAutoClose(true);
 
 	resize(400, 200);
@@ -63,7 +67,7 @@ void ccProgressDialog::update(float percent)
 	if (value != m_currentValue)
 	{
 		m_currentValue = value;
-		emit scheduleRefresh();
+		Q_EMIT scheduleRefresh();
 		QCoreApplication::processEvents(); //we let the main thread breath (so that the call to 'refresh' can be performed)
 	}
 }

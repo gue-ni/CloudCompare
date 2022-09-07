@@ -34,13 +34,16 @@ class CCPLUGIN_LIB_API ColorScaleElementSlider : public QWidget, public ccColorS
 public:
 
 	//! Default constructor
-	ColorScaleElementSlider(double relativePos = 0.0, QColor color = Qt::black, QWidget* parent = nullptr, Qt::Orientation orientation = Qt::Horizontal);
+	ColorScaleElementSlider(double relativePos = 0.0,
+							QColor color = Qt::black,
+							QWidget* parent = nullptr,
+							Qt::Orientation orientation = Qt::Horizontal);
 
 	//! Sets selection state
-	void setSelected(bool state) { m_selected = state; }
+	inline void setSelected(bool state) { m_selected = state; }
 
 	//! Returns selection state
-	bool isSelected() const { return m_selected; }
+	inline bool isSelected() const { return m_selected; }
 
 	//! Comparison operator between two (pointers on) color scale elements
 	static bool IsSmaller(const ColorScaleElementSlider* e1, const ColorScaleElementSlider* e2)
@@ -163,7 +166,7 @@ public:
 	//! Default constructor
 	ColorBarWidget(SharedColorScaleElementSliders sliders, QWidget* parent = nullptr, Qt::Orientation orientation = Qt::Horizontal);
 
-signals:
+Q_SIGNALS:
 
 	//! Signal emitted when the mouse (left) button is clicked
 	/** \param relativePos relative click position (between 0 and 1)
@@ -203,7 +206,7 @@ public:
 	//! Updates all sliders positions
 	void updateAllSlidersPos();
 
-signals:
+Q_SIGNALS:
 
 	//! Signal emitted when a slider is changed (position or color)
 	void sliderModified(int index);
@@ -304,7 +307,7 @@ public:
 	//inherited from ColorScaleEditorBaseWidget
 	void setSliders(SharedColorScaleElementSliders sliders) override;
 
-signals:
+Q_SIGNALS:
 
 	//! Signal emitted when a slider is selected
 	void stepSelected(int index);

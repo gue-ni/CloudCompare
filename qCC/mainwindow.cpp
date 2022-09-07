@@ -57,7 +57,7 @@
 #include <DepthMapFileFilter.h>
 
 //QCC_glWindow
-#include <ccGLWidget.h>
+#include <ccGLWindow.h>
 #include <ccRenderingTools.h>
 
 //local includes
@@ -141,10 +141,6 @@
 #include "ccGamepadManager.h"
 #endif
 
-#ifdef CC_CORE_LIB_USES_TBB
-#include <tbb/tbb_stddef.h>
-#endif
-
 //Qt
 #include <QClipboard>
 
@@ -213,7 +209,7 @@ MainWindow::MainWindow()
 	
 	m_pluginUIManager = new ccPluginUIManager( this, this );
 	
-	ccTranslationManager::get().populateMenu( m_UI->menuLanguage, ccApp->translationPath() );
+	ccTranslationManager::Get().populateMenu( m_UI->menuLanguage, ccApp->translationPath() );
 	
 #ifdef Q_OS_MAC
 	m_UI->actionAbout->setMenuRole( QAction::AboutRole );
@@ -303,8 +299,8 @@ MainWindow::MainWindow()
 	QMainWindow::statusBar()->showMessage(tr("Ready"));
 	
 #ifdef CC_CORE_LIB_USES_TBB
-	ccConsole::Print( QStringLiteral( "[TBB] Using Intel's Threading Building Blocks %1.%2" )
-					  .arg( QString::number( TBB_VERSION_MAJOR ), QString::number( TBB_VERSION_MINOR ) ) );
+	ccConsole::Print( QStringLiteral( "[TBB] Using Intel's Threading Building Blocks %1" )
+					  .arg( QString( TBB_VERSION ) ) );
 #endif
 	
 	ccConsole::Print(tr("CloudCompare started!"));
@@ -594,6 +590,7 @@ void MainWindow::connectActions()
 	connect(m_UI->actionBilateralFilter,			&QAction::triggered, this, &MainWindow::doActionSFBilateralFilter);
 	connect(m_UI->actionFilterByValue,				&QAction::triggered, this, &MainWindow::doActionFilterByValue);
 	connect(m_UI->actionAddConstantSF,				&QAction::triggered, this, &MainWindow::doActionAddConstantSF);
+    connect(m_UI->actionAddClassificationSF,        &QAction::triggered, this, &MainWindow::doActionAddClassificationSF);
 	connect(m_UI->actionScalarFieldArithmetic,		&QAction::triggered, this, &MainWindow::doActionScalarFieldArithmetic);
 	connect(m_UI->actionScalarFieldFromColor,		&QAction::triggered, this, &MainWindow::doActionScalarFieldFromColor);
 	connect(m_UI->actionConvertToRGB,				&QAction::triggered, this, &MainWindow::doActionSFConvertToRGB);
@@ -601,6 +598,7 @@ void MainWindow::connectActions()
 	connect(m_UI->actionRenameSF,					&QAction::triggered, this, &MainWindow::doActionRenameSF);
 	connect(m_UI->actionOpenColorScalesManager,		&QAction::triggered, this, &MainWindow::doActionOpenColorScalesManager);
 	connect(m_UI->actionAddIdField,					&QAction::triggered, this, &MainWindow::doActionAddIdField);
+    connect(m_UI->actionSplitCloudUsingSF,          &QAction::triggered, this, &MainWindow::doActionSplitCloudUsingSF);
 	connect(m_UI->actionSetSFAsCoord,				&QAction::triggered, this, &MainWindow::doActionSetSFAsCoord);
 	connect(m_UI->actionInterpolateSFs,				&QAction::triggered, this, &MainWindow::doActionInterpolateScalarFields);
 	connect(m_UI->actionDeleteScalarField, &QAction::triggered, this, [=]() {
@@ -902,12 +900,12 @@ void MainWindow::doActionComputeKdTree()
 
 	if ( haveOneSelection() )
 	{
-		ccHObject* ent = m_selectedEntities.back();
+		ccHObject* ent = m_selectedEntities.front();
 		bool lockedVertices;
-		cloud = ccHObjectCaster::ToGenericPointCloud(ent,&lockedVertices);
+		cloud = ccHObjectCaster::ToGenericPointCloud(ent, &lockedVertices);
 		if (lockedVertices)
 		{
-			ccUtils::DisplayLockedVerticesWarning(ent->getName(),true);
+			ccUtils::DisplayLockedVerticesWarning(ent->getName(), true);
 			return;
 		}
 	}
@@ -1826,13 +1824,13 @@ void MainWindow::doActionComputeDistancesFromSensor()
 void MainWindow::doActionComputeScatteringAngles()
 {
 	//there should be only one sensor in current selection!
-	if (!haveOneSelection() || !m_selectedEntities[0]->isKindOf(CC_TYPES::GBL_SENSOR))
+	if (!haveOneSelection() || !m_selectedEntities.front()->isKindOf(CC_TYPES::GBL_SENSOR))
 	{
 		ccConsole::Error(tr("Select one and only one GBL sensor!"));
 		return;
 	}
 
-	ccSensor* sensor = ccHObjectCaster::ToSensor(m_selectedEntities[0]);
+	ccSensor* sensor = ccHObjectCaster::ToSensor(m_selectedEntities.front());
 	assert(sensor);
 
 	//sensor center
@@ -1911,13 +1909,13 @@ void MainWindow::doActionComputeScatteringAngles()
 void MainWindow::doActionSetViewFromSensor()
 {
 	//there should be only one sensor in current selection!
-	if (!haveOneSelection() || !m_selectedEntities[0]->isKindOf(CC_TYPES::SENSOR))
+	if (!haveOneSelection() || !m_selectedEntities.front()->isKindOf(CC_TYPES::SENSOR))
 	{
 		ccConsole::Error(tr("Select one and only one sensor!"));
 		return;
 	}
 
-	ccSensor* sensor = ccHObjectCaster::ToSensor(m_selectedEntities[0]);
+	ccSensor* sensor = ccHObjectCaster::ToSensor(m_selectedEntities.front());
 	assert(sensor);
 
 	//try to find the associated window
@@ -2092,13 +2090,13 @@ void MainWindow::doActionCreateCameraSensor()
 void MainWindow::doActionModifySensor()
 {
 	//there should be only one point cloud with sensor in current selection!
-	if (!haveOneSelection() || !m_selectedEntities[0]->isKindOf(CC_TYPES::SENSOR))
+	if (!haveOneSelection() || !m_selectedEntities.front()->isKindOf(CC_TYPES::SENSOR))
 	{
 		ccConsole::Error(tr("Select one and only one sensor!"));
 		return;
 	}
 
-	ccSensor* sensor = static_cast<ccSensor*>(m_selectedEntities[0]);
+	ccSensor* sensor = static_cast<ccSensor*>(m_selectedEntities.front());
 
 	//Ground based laser sensors
 	if (sensor->isA(CC_TYPES::GBL_SENSOR))
@@ -2167,13 +2165,13 @@ void MainWindow::doActionModifySensor()
 void MainWindow::doActionProjectUncertainty()
 {
 	//there should only be one sensor in the current selection!
-	if (!haveOneSelection() || !m_selectedEntities[0]->isKindOf(CC_TYPES::CAMERA_SENSOR))
+	if (!haveOneSelection() || !m_selectedEntities.front()->isKindOf(CC_TYPES::CAMERA_SENSOR))
 	{
 		ccConsole::Error(tr("Select one and only one camera (projective) sensor!"));
 		return;
 	}
 
-	ccCameraSensor* sensor = ccHObjectCaster::ToCameraSensor(m_selectedEntities[0]);
+	ccCameraSensor* sensor = ccHObjectCaster::ToCameraSensor(m_selectedEntities.front());
 	if (!sensor)
 	{
 		assert(false);
@@ -2280,13 +2278,13 @@ void MainWindow::doActionProjectUncertainty()
 void MainWindow::doActionCheckPointsInsideFrustum()
 {
 	//there should be only one camera sensor in the current selection!
-	if (!haveOneSelection() || !m_selectedEntities[0]->isKindOf(CC_TYPES::CAMERA_SENSOR))
+	if (!haveOneSelection() || !m_selectedEntities.front()->isKindOf(CC_TYPES::CAMERA_SENSOR))
 	{
 		ccConsole::Error(tr("Select one and only one camera sensor!"));
 		return;
 	}
 
-	ccCameraSensor* sensor = ccHObjectCaster::ToCameraSensor(m_selectedEntities[0]);
+	ccCameraSensor* sensor = ccHObjectCaster::ToCameraSensor(m_selectedEntities.front());
 	if (!sensor)
 		return;
 
@@ -2373,7 +2371,7 @@ void MainWindow::doActionShowDepthBuffer()
 	{
 		if (entity->isKindOf(CC_TYPES::GBL_SENSOR))
 		{
-			ccGBLSensor* sensor = static_cast<ccGBLSensor*>(m_selectedEntities[0]);
+			ccGBLSensor* sensor = static_cast<ccGBLSensor*>(m_selectedEntities.front());
 			if (sensor->getDepthBuffer().zBuff.empty())
 			{
 				//look for depending cloud
@@ -2468,13 +2466,13 @@ void MainWindow::doActionExportDepthBuffer()
 void MainWindow::doActionComputePointsVisibility()
 {
 	//there should be only one camera sensor in the current selection!
-	if (!haveOneSelection() || !m_selectedEntities[0]->isKindOf(CC_TYPES::GBL_SENSOR))
+	if (!haveOneSelection() || !m_selectedEntities.front()->isKindOf(CC_TYPES::GBL_SENSOR))
 	{
 		ccConsole::Error(tr("Select one and only one GBL/TLS sensor!"));
 		return;
 	}
 
-	ccGBLSensor* sensor = ccHObjectCaster::ToGBLSensor(m_selectedEntities[0]);
+	ccGBLSensor* sensor = ccHObjectCaster::ToGBLSensor(m_selectedEntities.front());
 	if (!sensor)
 		return;
 
@@ -2802,9 +2800,9 @@ void MainWindow::doRemoveDuplicatePoints()
 			ccOctree::Shared octree = cloud->getOctree();
 
 			CCCoreLib::GeometricalAnalysisTools::ErrorCode result = CCCoreLib::GeometricalAnalysisTools::FlagDuplicatePoints(	cloud,
-																														minDistanceBetweenPoints,
-																														&pDlg,
-																														octree.data());
+																																minDistanceBetweenPoints,
+																																&pDlg,
+																																octree.data());
 
 			if (result == CCCoreLib::GeometricalAnalysisTools::NoError)
 			{
@@ -2848,6 +2846,10 @@ void MainWindow::doRemoveDuplicatePoints()
 						}
 						cloud->setEnabled(false);
 						m_ccRoot->selectEntity(filteredCloud, true);
+					}
+					else
+					{
+						ccConsole::Error(tr("Not enough memory to create the filtered cloud"));
 					}
 				}
 			}
@@ -3058,7 +3060,7 @@ void MainWindow::doApplyActiveSFAction(int action)
 		}
 		return;
 	}
-	ccHObject* ent = m_selectedEntities[0];
+	ccHObject* ent = m_selectedEntities.front();
 
 	bool lockedVertices;
 	ccPointCloud* cloud = ccHObjectCaster::ToPointCloud(ent,&lockedVertices);
@@ -3134,6 +3136,15 @@ void MainWindow::doActionAddIdField()
 
 	refreshAll();
 	updateUI();
+}
+
+void MainWindow::doActionSplitCloudUsingSF()
+{
+    if (!ccEntityAction::sfSplitCloud(m_selectedEntities, this))
+        return;
+
+    refreshAll();
+    updateUI();
 }
 
 void MainWindow::doActionSFGaussianFilter()
@@ -3295,32 +3306,30 @@ void MainWindow::doActionSmoothMeshLaplacian()
 // helper for doActionMerge
 void AddToRemoveList(ccHObject* toRemove, ccHObject::Container& toBeRemovedList)
 {
-	//is a parent or sibling already in the "toBeRemoved" list?
-	int j = 0;
-	int count = static_cast<int>(toBeRemovedList.size());
-	while (j < count)
+	// is a parent or sibling already in the "toBeRemoved" list?
+	size_t count = toBeRemovedList.size();
+	for (size_t j = 0; j < count;)
 	{
 		if (toBeRemovedList[j]->isAncestorOf(toRemove))
 		{
-			toRemove = nullptr;
-			break;
+			// nothing to do, we already have an ancestor
+			return;
 		}
 		else if (toRemove->isAncestorOf(toBeRemovedList[j]))
 		{
+			// we don't need to keep the children
 			toBeRemovedList[j] = toBeRemovedList.back();
 			toBeRemovedList.pop_back();
 			count--;
-			j++;
 		}
 		else
 		{
-			//forward
-			j++;
+			// forward
+			++j;
 		}
 	}
 
-	if (toRemove)
-		toBeRemovedList.push_back(toRemove);
+	toBeRemovedList.push_back(toRemove);
 }
 
 void MainWindow::doActionMerge()
@@ -3450,19 +3459,12 @@ void MainWindow::doActionMerge()
 					firstCloud->prepareDisplayForRefresh_recursive();
 
 					ccHObject* toRemove = nullptr;
-					//if the entity to remove is a group with a unique child, we can remove it as well
+					//if the entity to remove is inside a group with a unique child, we can remove the group as well
 					ccHObject* parent = pc->getParent();
 					if (parent && parent->isA(CC_TYPES::HIERARCHY_OBJECT) && parent->getChildrenNumber() == 1 && parent != firstCloudContext.parent)
 						toRemove = parent;
 					else
 						toRemove = pc;
-
-					if (toRemove->getParent())
-					{
-						// we detach all the clouds (or group containing clouds) from their parent
-						// to avoid issues when deleting them later
-						toRemove->getParent()->detachChild(toRemove);
-					}
 
 					AddToRemoveList(toRemove, toBeRemoved);
 
@@ -3491,16 +3493,24 @@ void MainWindow::doActionMerge()
 		}
 
 		//something to remove?
-		while (!toBeRemoved.empty())
+		for (ccHObject* toRemove : toBeRemoved)
 		{
-			if (toBeRemoved.back() && m_ccRoot)
+			if (firstCloud->isAncestorOf(toRemove))
 			{
-				m_ccRoot->removeElement(toBeRemoved.back());
+				// we cannot call 'removeElement' on a child of the first cloud, as it's temporarily detached from the DB tree!
+				if (toRemove->getParent())
+					toRemove->getParent()->removeChild(toRemove);
+				else
+					delete toRemove;
 			}
-			toBeRemoved.pop_back();
+			else
+			{
+				m_ccRoot->removeElement(toRemove);
+			}
 		}
+		toBeRemoved.clear();
 
-		//put back first cloud in DB
+		//eventually we can put back the first cloud in DB
 		if (firstCloud)
 		{
 			putObjectBackIntoDBTree(firstCloud, firstCloudContext);
@@ -3560,14 +3570,14 @@ void MainWindow::zoomOn(ccHObject* object)
 void MainWindow::doActionRegister()
 {
 	if (	m_selectedEntities.size() != 2
-		||	(!m_selectedEntities[0]->isKindOf(CC_TYPES::POINT_CLOUD) && !m_selectedEntities[0]->isKindOf(CC_TYPES::MESH))
+		||	(!m_selectedEntities.front()->isKindOf(CC_TYPES::POINT_CLOUD) && !m_selectedEntities.front()->isKindOf(CC_TYPES::MESH))
 		||	(!m_selectedEntities[1]->isKindOf(CC_TYPES::POINT_CLOUD) && !m_selectedEntities[1]->isKindOf(CC_TYPES::MESH)) )
 	{
 		ccConsole::Error(tr("Select 2 point clouds or meshes!"));
 		return;
 	}
 
-	ccHObject* data = static_cast<ccHObject*>(m_selectedEntities[0]);
+	ccHObject* data = static_cast<ccHObject*>(m_selectedEntities.front());
 	ccHObject* model = static_cast<ccHObject*>(m_selectedEntities[1]);
 	if (data->isKindOf(CC_TYPES::MESH) && model->isKindOf(CC_TYPES::POINT_CLOUD))
 	{
@@ -3789,14 +3799,14 @@ void MainWindow::doAction4pcsRegister()
 		return;
 	}
 
-	if (!m_selectedEntities[0]->isKindOf(CC_TYPES::POINT_CLOUD) ||
+	if (!m_selectedEntities.front()->isKindOf(CC_TYPES::POINT_CLOUD) ||
 		!m_selectedEntities[1]->isKindOf(CC_TYPES::POINT_CLOUD))
 	{
 		ccConsole::Error(tr("Select 2 point clouds!"));
 		return;
 	}
 
-	ccGenericPointCloud* model = ccHObjectCaster::ToGenericPointCloud(m_selectedEntities[0]);
+	ccGenericPointCloud* model = ccHObjectCaster::ToGenericPointCloud(m_selectedEntities.front());
 	ccGenericPointCloud* data = ccHObjectCaster::ToGenericPointCloud(m_selectedEntities[1]);
 
 	ccAlignDlg aDlg(model, data);
@@ -4300,7 +4310,7 @@ void MainWindow::doMeshTwoPolylines()
 	if (m_selectedEntities.size() != 2)
 		return;
 
-	ccPolyline* p1 = ccHObjectCaster::ToPolyline(m_selectedEntities[0]);
+	ccPolyline* p1 = ccHObjectCaster::ToPolyline(m_selectedEntities.front());
 	ccPolyline* p2 = ccHObjectCaster::ToPolyline(m_selectedEntities[1]);
 	if (!p1 || !p2)
 	{
@@ -4567,7 +4577,7 @@ void MainWindow::doCompute2HalfDimVolume()
 
 	ccGenericPointCloud* cloud1 = nullptr;
 	{
-		ccHObject* ent = m_selectedEntities[0];
+		ccHObject* ent = m_selectedEntities.front();
 		if (!ent->isKindOf(CC_TYPES::POINT_CLOUD) )
 		{
 			ccConsole::Error(tr("Select point clouds only!"));
@@ -4606,7 +4616,7 @@ void MainWindow::doActionRasterize()
 		return;
 	}
 
-	ccHObject* ent = m_selectedEntities[0];
+	ccHObject* ent = m_selectedEntities.front();
 	if (!ent->isKindOf(CC_TYPES::POINT_CLOUD) )
 	{
 		ccConsole::Error(tr("Select a point cloud!"));
@@ -5113,14 +5123,14 @@ void MainWindow::doActionComputeCPS()
 		return;
 	}
 
-	if (!m_selectedEntities[0]->isKindOf(CC_TYPES::POINT_CLOUD) ||
+	if (!m_selectedEntities.front()->isKindOf(CC_TYPES::POINT_CLOUD) ||
 		!m_selectedEntities[1]->isKindOf(CC_TYPES::POINT_CLOUD))
 	{
 		ccConsole::Error(tr("Select 2 point clouds!"));
 		return;
 	}
 
-	ccOrderChoiceDlg dlg(	m_selectedEntities[0], tr("Compared"),
+	ccOrderChoiceDlg dlg(	m_selectedEntities.front(), tr("Compared"),
 							m_selectedEntities[1], tr("Reference"),
 							this );
 	if (!dlg.exec())
@@ -5213,7 +5223,7 @@ void MainWindow::doActionFindBiggestInnerRectangle()
 	if (!haveSelection())
 		return;
 
-	ccHObject* entity = haveOneSelection() ? m_selectedEntities[0] : nullptr;
+	ccHObject* entity = haveOneSelection() ? m_selectedEntities.front() : nullptr;
 	if (!entity || !entity->isKindOf(CC_TYPES::POINT_CLOUD))
 	{
 		ccConsole::Error(tr("Select one point cloud!"));
@@ -5632,10 +5642,10 @@ void MainWindow::doActionUnroll()
 
 	//if selected entity is a mesh, the method will be applied to its vertices
 	bool lockedVertices;
-	ccGenericPointCloud* cloud = ccHObjectCaster::ToGenericPointCloud(m_selectedEntities[0], &lockedVertices);
+	ccGenericPointCloud* cloud = ccHObjectCaster::ToGenericPointCloud(m_selectedEntities.front(), &lockedVertices);
 	if (lockedVertices)
 	{
-		ccUtils::DisplayLockedVerticesWarning(m_selectedEntities[0]->getName(), true);
+		ccUtils::DisplayLockedVerticesWarning(m_selectedEntities.front()->getName(), true);
 		return;
 	}
 
@@ -5708,9 +5718,9 @@ void MainWindow::doActionUnroll()
 
 	if (output)
 	{
-		if (m_selectedEntities[0]->isA(CC_TYPES::MESH))
+		if (m_selectedEntities.front()->isA(CC_TYPES::MESH))
 		{
-			ccMesh* mesh = ccHObjectCaster::ToMesh(m_selectedEntities[0]);
+			ccMesh* mesh = ccHObjectCaster::ToMesh(m_selectedEntities.front());
 			mesh->setEnabled(false);
 			ccConsole::Warning(tr("[Unroll] Original mesh has been automatically hidden"));
 			ccMesh* outputMesh = mesh->cloneMesh(output);
@@ -5977,14 +5987,14 @@ void MainWindow::showEvent(QShowEvent* event)
 	QMainWindow::showEvent(event);
 }
 
-void MainWindow::closeEvent(QCloseEvent *event)
+void MainWindow::closeEvent(QCloseEvent* event)
 {
 	// If we don't have anything displayed, then just close...
 	if (m_ccRoot && (m_ccRoot->getRootEntity()->getChildrenNumber() == 0))
 	{
 		event->accept();
 	}
-	else	// ...otherwise confirm
+	else // ...otherwise confirm
 	{
 		QMessageBox message_box( QMessageBox::Question,
 								 tr("Quit"),
@@ -6266,7 +6276,7 @@ void MainWindow::activateRegisterPointPairTool()
 		else
 		{
 			std::vector<int> indexes;
-			if (!ccEntitySelectionDialog::SelectEntities(entities, indexes, this, tr("Select aligned entities")))
+			if (!ccEntitySelectionDialog::SelectEntities(entities, indexes, this, tr("Select to-be-aligned entities")))
 			{
 				//process cancelled by the user
 				return;
@@ -6299,7 +6309,7 @@ void MainWindow::activateRegisterPointPairTool()
 
 	if (alignedEntities.empty())
 	{
-		ccLog::Error(tr("No aligned entity selected"));
+		ccLog::Error(tr("No to-be-aligned entity selected"));
 		return;
 	}
 
@@ -6592,7 +6602,7 @@ void MainWindow::activatePointListPickingMode()
 		return;
 	}
 
-	ccHObject* entity = m_selectedEntities[0];
+	ccHObject* entity = m_selectedEntities.front();
 	if (!entity->isKindOf(CC_TYPES::POINT_CLOUD) && !entity->isKindOf(CC_TYPES::MESH))
 	{
 		ccConsole::Error(tr("Select a cloud or a mesh"));
@@ -7331,7 +7341,7 @@ void MainWindow::doLevel()
 		win->addToOwnDB(s_levelMarkersCloud);
 	}
 
-	s_levelEntity = m_selectedEntities[0];
+	s_levelEntity = m_selectedEntities.front();
 	s_levelLabels.clear();
 	s_currentPickingOperation = PICKING_LEVEL_POINTS;
 
@@ -7373,7 +7383,7 @@ void MainWindow::doPickRotationCenter()
 	enablePickingOperation(win, tr("Pick a point to be used as rotation center (click on icon again to cancel)"));
 }
 
-ccPointCloud* MainWindow::askUserToSelectACloud(ccHObject* defaultCloudEntity/*=0*/, QString inviteMessage/*=QString()*/)
+ccPointCloud* MainWindow::askUserToSelectACloud(ccHObject* defaultCloudEntity/*=nullptr*/, QString inviteMessage/*=QString()*/)
 {
 	ccHObject::Container clouds;
 	m_ccRoot->getRootEntity()->filterChildren(clouds, true, CC_TYPES::POINT_CLOUD, true);
@@ -7515,7 +7525,7 @@ void MainWindow::doActionCrop()
 		return;
 	}
 
-	ccBoundingBoxEditorDlg bbeDlg(this);
+	ccBoundingBoxEditorDlg bbeDlg(false, false, this);
 	bbeDlg.setBaseBBox(baseBB, false);
 	bbeDlg.showInclusionWarning(false);
 	bbeDlg.setWindowTitle("Crop");
@@ -7671,7 +7681,6 @@ void MainWindow::doActionClone()
 	updateUI();
 }
 
-static double s_constantSFValue = 0.0;
 void MainWindow::doActionAddConstantSF()
 {
 	if (!haveOneSelection())
@@ -7681,14 +7690,15 @@ void MainWindow::doActionAddConstantSF()
 		return;
 	}
 
-	ccHObject* ent = m_selectedEntities[0];
+	ccHObject* ent = m_selectedEntities.front();
 
 	bool lockedVertices;
-	ccPointCloud* cloud = ccHObjectCaster::ToPointCloud(ent,&lockedVertices);
+	ccPointCloud* cloud = ccHObjectCaster::ToPointCloud(ent, &lockedVertices);
 
 	//for "real" point clouds only
 	if (!cloud)
 		return;
+
 	if (lockedVertices && !ent->isAncestorOf(cloud))
 	{
 		ccUtils::DisplayLockedVerticesWarning(ent->getName(),true);
@@ -7707,44 +7717,43 @@ void MainWindow::doActionAddConstantSF()
 	QString sfName = QInputDialog::getText(this, tr("New SF name"), tr("SF name (must be unique)"), QLineEdit::Normal, defaultName, &ok);
 	if (!ok)
 		return;
-	if (sfName.isNull())
-	{
-		ccLog::Error(tr("Invalid name"));
-		return;
-	}
-	if (cloud->getScalarFieldIndexByName(qPrintable(sfName)) >= 0)
-	{
-		ccLog::Error(tr("Name already exists!"));
-		return;
-	}
 
-	ScalarType sfValue = static_cast<ScalarType>(QInputDialog::getDouble(this, tr("Add constant value"), tr("value"), s_constantSFValue, -1.0e9, 1.0e9, 8, &ok));
-	if (!ok)
-		return;
-
-	int sfIdx = cloud->getScalarFieldIndexByName(qPrintable(sfName));
-	if (sfIdx < 0)
-		sfIdx = cloud->addScalarField(qPrintable(sfName));
-	if (sfIdx < 0)
+	if (ccEntityAction::sfAddConstant(cloud, sfName, false, this))
 	{
-		ccLog::Error(tr("An error occurred! (see console)"));
-		return;
-	}
-
-	CCCoreLib::ScalarField* sf = cloud->getScalarField(sfIdx);
-	assert(sf);
-	if (sf)
-	{
-		sf->fill(sfValue);
-		sf->computeMinAndMax();
-		cloud->setCurrentDisplayedScalarField(sfIdx);
-		cloud->showSF(true);
 		updateUI();
-		if (cloud->getDisplay())
-			cloud->getDisplay()->redraw(false);
+		cloud->redrawDisplay();
+	}
+}
+
+void MainWindow::doActionAddClassificationSF()
+{
+	if (!haveOneSelection())
+	{
+		if (haveSelection())
+			ccConsole::Error(tr("Select only one cloud or one mesh!"));
+		return;
 	}
 
-	ccLog::Print(tr("New scalar field added to %1 (constant value: %2)").arg(cloud->getName()).arg(sfValue));
+	ccHObject* ent = m_selectedEntities.front();
+
+	bool lockedVertices;
+	ccPointCloud* cloud = ccHObjectCaster::ToPointCloud(ent, &lockedVertices);
+
+	//for "real" point clouds only
+	if (!cloud)
+		return;
+
+	if (lockedVertices && !ent->isAncestorOf(cloud))
+	{
+		ccUtils::DisplayLockedVerticesWarning(ent->getName(), true);
+		return;
+	}
+
+	if (ccEntityAction::sfAddConstant(cloud, "Classification", true, this))
+	{
+		updateUI();
+		cloud->redrawDisplay();
+	}
 }
 
 void MainWindow::doActionScalarFieldFromColor()
@@ -8786,14 +8795,14 @@ void MainWindow::doActionCloudCloudDist()
 		return;
 	}
 
-	if (!m_selectedEntities[0]->isKindOf(CC_TYPES::POINT_CLOUD) ||
+	if (!m_selectedEntities.front()->isKindOf(CC_TYPES::POINT_CLOUD) ||
 		!m_selectedEntities[1]->isKindOf(CC_TYPES::POINT_CLOUD))
 	{
 		ccConsole::Error(tr("Select 2 point clouds!"));
 		return;
 	}
 
-	ccOrderChoiceDlg dlg(	m_selectedEntities[0], tr("Compared"),
+	ccOrderChoiceDlg dlg(	m_selectedEntities.front(), tr("Compared"),
 							m_selectedEntities[1], tr("Reference"),
 							this );
 	if (!dlg.exec())
@@ -8867,7 +8876,7 @@ void MainWindow::doActionCloudMeshDist()
 	}
 	else
 	{
-		ccOrderChoiceDlg dlg(	m_selectedEntities[0], tr("Compared"),
+		ccOrderChoiceDlg dlg(	m_selectedEntities.front(), tr("Compared"),
 								m_selectedEntities[1], tr("Reference"),
 								this );
 		if (!dlg.exec())
@@ -9755,7 +9764,7 @@ void MainWindow::addToDBAuto(const QStringList& filenames)
 
 void MainWindow::addToDB(	const QStringList& filenames,
 							QString fileFilter/*=QString()*/,
-							ccGLWindow* destWin/*=0*/)
+							ccGLWindow* destWin/*=nullptr*/)
 {
 	//to use the same 'global shift' for multiple files
 	CCVector3d loadCoordinatesShift(0, 0, 0);
@@ -10540,6 +10549,7 @@ void MainWindow::enableUIItems(dbTreeSelectionInfo& selInfo)
 	m_UI->actionEditGlobalShiftAndScale->setEnabled(atLeastOneCloud || atLeastOneMesh || atLeastOnePolyline);
 	m_UI->actionCrop->setEnabled(atLeastOneCloud || atLeastOneMesh);
 	m_UI->actionSetUniqueColor->setEnabled(atLeastOneEntity/*atLeastOneCloud || atLeastOneMesh*/); //DGM: we can set color to a group now!
+	m_UI->actionSetColorGradient->setEnabled(atLeastOneCloud || atLeastOneMesh);
 	m_UI->actionColorize->setEnabled(atLeastOneEntity/*atLeastOneCloud || atLeastOneMesh*/); //DGM: we can set color to a group now!
 	m_UI->actionDeleteScanGrid->setEnabled(atLeastOneGrid);
 
@@ -10568,6 +10578,7 @@ void MainWindow::enableUIItems(dbTreeSelectionInfo& selInfo)
 	m_UI->actionConvertToRandomRGB->setEnabled(atLeastOneSF);
 	m_UI->actionRenameSF->setEnabled(atLeastOneSF);
 	m_UI->actionAddIdField->setEnabled(atLeastOneCloud);
+	m_UI->actionSplitCloudUsingSF->setEnabled(atLeastOneSF);
 	m_UI->actionComputeStatParams->setEnabled(atLeastOneSF);
 	m_UI->actionComputeStatParams2->setEnabled(atLeastOneSF);
 	m_UI->actionShowHistogram->setEnabled(atLeastOneSF);
@@ -10587,6 +10598,7 @@ void MainWindow::enableUIItems(dbTreeSelectionInfo& selInfo)
 	m_UI->actionSmoothMeshLaplacian->setEnabled(atLeastOneMesh);
 	m_UI->actionConvertTextureToColor->setEnabled(atLeastOneMesh);
 	m_UI->actionSubdivideMesh->setEnabled(atLeastOneMesh);
+	m_UI->actionFlipMeshTriangles->setEnabled(atLeastOneMesh);
 	m_UI->actionDistanceToBestFitQuadric3D->setEnabled(atLeastOneCloud);
 	m_UI->actionDistanceMap->setEnabled(atLeastOneMesh || atLeastOneCloud);
 
@@ -10633,6 +10645,7 @@ void MainWindow::enableUIItems(dbTreeSelectionInfo& selInfo)
 	m_UI->actionUnroll->setEnabled(exactlyOneEntity);
 	m_UI->actionStatisticalTest->setEnabled(exactlyOneEntity && exactlyOneSF);
 	m_UI->actionAddConstantSF->setEnabled(exactlyOneCloud || exactlyOneMesh);
+	m_UI->actionAddClassificationSF->setEnabled(exactlyOneCloud || exactlyOneMesh);
 	m_UI->actionEditGlobalScale->setEnabled(exactlyOneCloud || exactlyOneMesh);
 	m_UI->actionComputeKdTree->setEnabled(exactlyOneCloud || exactlyOneMesh);
 	m_UI->actionShowWaveDialog->setEnabled(exactlyOneCloud);
@@ -11005,7 +11018,7 @@ void MainWindow::doActionShowWaveDialog()
 	if (!haveSelection())
 		return;
 
-	ccHObject* entity = haveOneSelection() ? m_selectedEntities[0] : nullptr;
+	ccHObject* entity = haveOneSelection() ? m_selectedEntities.front() : nullptr;
 	if (!entity || !entity->isKindOf(CC_TYPES::POINT_CLOUD))
 	{
 		ccConsole::Error(tr("Select one point cloud!"));
@@ -11081,14 +11094,14 @@ void MainWindow::doActionComparePlanes()
 		return;
 	}
 
-	if (!m_selectedEntities[0]->isKindOf(CC_TYPES::PLANE) ||
+	if (!m_selectedEntities.front()->isKindOf(CC_TYPES::PLANE) ||
 		!m_selectedEntities[1]->isKindOf(CC_TYPES::PLANE))
 	{
 		ccConsole::Error(tr("Select 2 planes!"));
 		return;
 	}
 
-	ccPlane* p1 = ccHObjectCaster::ToPlane(m_selectedEntities[0]);
+	ccPlane* p1 = ccHObjectCaster::ToPlane(m_selectedEntities.front());
 	ccPlane* p2 = ccHObjectCaster::ToPlane(m_selectedEntities[1]);
 
 	QStringList info;

@@ -1,4 +1,4 @@
-project( CloudCompare VERSION 2.12.0 )
+project( CloudCompare VERSION 2.13.0 )
 
 include( CMakePolicies NO_POLICY_SCOPE )
 
@@ -34,6 +34,7 @@ elseif( APPLE )
 	add_executable( ${PROJECT_NAME} MACOSX_BUNDLE ${header_list} ${source_list} ${generated_ui_list} ${generated_qrc_list} ${txt_list} )
 else()
 	add_executable( ${PROJECT_NAME} ${header_list} ${source_list} ${generated_ui_list} ${generated_qrc_list} ${rc_list} ${txt_list} )
+	target_compile_definitions( ${PROJECT_NAME} PRIVATE QT_NO_KEYWORDS )
 endif()
 
 if( WIN32 )

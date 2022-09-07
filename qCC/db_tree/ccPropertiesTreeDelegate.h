@@ -129,7 +129,7 @@ public:
 	//! Returns currently bound object
 	ccHObject* getCurrentObject();
 
-signals:
+Q_SIGNALS:
 	void ccObjectPropertiesChanged(ccHObject* hObject) const;
 	void ccObjectAppearanceChanged(ccHObject* hObject) const;
 	void ccObjectAndChildrenAppearanceChanged(ccHObject* hObject) const;
@@ -209,6 +209,7 @@ private:
 	ccHObject* m_currentObject;
 	QStandardItemModel* m_model;
 	QAbstractItemView* m_view;
+	CC_PROPERTY_ROLE m_lastFocusItemRole;
 };
 
 #endif

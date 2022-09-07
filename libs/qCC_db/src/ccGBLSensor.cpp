@@ -627,7 +627,7 @@ bool ccGBLSensor::computeAutoParameters(CCCoreLib::GenericCloud* theCloud)
 	return true;
 }
 
-bool ccGBLSensor::computeDepthBuffer(CCCoreLib::GenericCloud* theCloud, int& errorCode, ccPointCloud* projectedCloud/*=0*/)
+bool ccGBLSensor::computeDepthBuffer(CCCoreLib::GenericCloud* theCloud, int& errorCode, ccPointCloud* projectedCloud/*=nullptr*/)
 {
 	assert(theCloud);
 	if (!theCloud)
@@ -877,7 +877,7 @@ void ccGBLSensor::drawMeOnly(CC_DRAW_CONTEXT& context)
 		CCVector3 maxCorner( halfHeadSize, halfHeadSize, halfHeadSize);
 		minCorner *= m_scale;
 		maxCorner *= m_scale;
-		ccBBox bbHead(minCorner,maxCorner);
+		ccBBox bbHead(minCorner, maxCorner, true);
 		bbHead.draw(context, m_color);
 	}
 
@@ -947,10 +947,11 @@ ccBBox ccGBLSensor::getOwnFitBB(ccGLMatrix& trans)
 	trans = sensorPos;
 
 	return ccBBox(	CCVector3(-m_scale,-m_scale,-m_scale),
-					CCVector3( m_scale, m_scale, m_scale) );
+					CCVector3( m_scale, m_scale, m_scale),
+					true );
 }
 
-bool ccGBLSensor::applyViewport(ccGenericGLDisplay* win/*=0*/)
+bool ccGBLSensor::applyViewport(ccGenericGLDisplay* win/*=nullptr*/)
 {
 	if (!win)
 	{

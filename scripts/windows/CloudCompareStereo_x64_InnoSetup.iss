@@ -2,13 +2,13 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "CloudCompareStereo"
-#define MyAppVersion "2.12.beta"
+#define MyAppVersion "2.13.alpha"
 #define MyAppPublisher "Daniel Girardeau-Montaut"
 #define MyAppURL "http://www.cloudcompare.org/"
 #define MyAppExeName "CloudCompare.exe"
 #define MyVCRedistPath "E:\These\C++\CloudCompare\vc_redist"
 #define MyFaroRedistPath "E:\These\C++\Faro\redist"
-#define MyFaroRedistExe "FARO LS 2020.0.4.5330 Setup.exe"
+#define MyFaroRedistExe "FARO LS 2020.0.7.6378 Setup"
 #define MyCCPath "E:\These\C++\CloudCompare\new_bin_x64_msvc_2017\CloudCompareStereo"
 #define MyOutputDir "E:\These\C++\CloudCompare\new_bin_x64_msvc_2017"
 #define MyCreationDate GetDateTimeString('mm_dd_yyyy', '', '')

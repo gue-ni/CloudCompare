@@ -30,7 +30,7 @@
 #include <ccColorTypes.h>
 
 //qCC_gl
-#include <ccGLWidget.h>
+#include <ccGLWindow.h>
 
 //Qt
 #include <QFrame>
@@ -65,9 +65,10 @@ bool cc2Point5DimEditor::showGridBoxEditor()
 		unsigned char projDim = getProjectionDimension();
 		assert(projDim < 3);
 		m_bbEditorDlg->set2DMode(true, projDim);
+		
 		if (m_bbEditorDlg->exec())
 		{
-			gridIsUpToDate(false);
+			gridIsUpToDate(false); // will call updateGridInfo
 			return true;
 		}
 	}
@@ -79,7 +80,7 @@ void cc2Point5DimEditor::createBoundingBoxEditor(const ccBBox& gridBBox, QWidget
 {
 	if (!m_bbEditorDlg)
 	{
-		m_bbEditorDlg = new ccBoundingBoxEditorDlg(parent);
+		m_bbEditorDlg = new ccBoundingBoxEditorDlg(false, true, parent);
 		m_bbEditorDlg->setBaseBBox(gridBBox, false);
 	}
 }
@@ -100,11 +101,11 @@ void cc2Point5DimEditor::create2DView(QFrame* parentFrame)
 		params.decimateMeshOnMove = false;
 		params.displayCross = false;
 		params.colorScaleUseShader = false;
-		m_glWindow->setDisplayParameters(params,true);
-		m_glWindow->setPerspectiveState(false,true);
+		m_glWindow->setDisplayParameters(params, true);
+		m_glWindow->setPerspectiveState(false, true);
 		m_glWindow->setInteractionMode(ccGLWindow::INTERACT_PAN | ccGLWindow::INTERACT_ZOOM_CAMERA | ccGLWindow::INTERACT_CLICKABLE_ITEMS);
 		m_glWindow->setPickingMode(ccGLWindow::NO_PICKING);
-		m_glWindow->displayOverlayEntities(true);
+		m_glWindow->displayOverlayEntities(true, false);
 		m_glWindow->setSunLight(true);
 		m_glWindow->setCustomLight(false);
 
@@ -144,7 +145,7 @@ QString cc2Point5DimEditor::getGridSizeAsString() const
 		return QObject::tr("invalid grid box");
 	}
 
-	return QString("%1 x %2").arg(gridWidth).arg(gridHeight);
+	return QString("%1 x %2 (%3 cells)").arg(gridWidth).arg(gridHeight).arg(QLocale::system().toString(gridWidth * gridHeight));
 }
 
 ccBBox cc2Point5DimEditor::getCustomBBox() const

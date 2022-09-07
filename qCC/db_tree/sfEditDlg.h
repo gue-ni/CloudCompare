@@ -37,7 +37,7 @@ class sfEditDlg : public QWidget
 public:
 
 	//! Default constructor
-	explicit sfEditDlg(QWidget* parent = 0);
+	explicit sfEditDlg(QWidget* parent = nullptr);
 
 	~sfEditDlg();
 	
@@ -61,7 +61,7 @@ public:
 	void symmetricalScaleChanged(bool);
 	void logScaleChanged(bool);
 
-signals:
+Q_SIGNALS:
 
 	//! Signal emitted when the SF display parameters have changed
 	void entitySFHasChanged();

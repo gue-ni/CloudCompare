@@ -50,7 +50,7 @@ public:
 	ccComparisonDlg(ccHObject* compEntity,
 					ccHObject* refEntity,
 					CC_COMPARISON_TYPE cpType,
-					QWidget* parent = 0,
+					QWidget* parent = nullptr,
 					bool noDisplay = false);
 
 	//! Default destructor
@@ -73,6 +73,7 @@ protected:
 	void showHisto();
 	void locaModelChanged(int);
 	void maxDistUpdated();
+    void enableCompute2D(bool);
 
 protected:
 

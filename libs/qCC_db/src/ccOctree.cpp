@@ -81,7 +81,7 @@ void ccOctree::setDisplayMode(DisplayMode mode)
 void ccOctree::clear()
 {
 	//warn the others that the octree organization is going to change
-	emit updated();
+	Q_EMIT updated();
 
 	QOpenGLContext* context = QOpenGLContext::currentContext();
 	if (context)
@@ -104,12 +104,12 @@ void ccOctree::clear()
 
 ccBBox ccOctree::getSquareBB() const
 {
-	return ccBBox(m_dimMin, m_dimMax);
+	return ccBBox(m_dimMin, m_dimMax, true);
 }
 
 ccBBox ccOctree::getPointsBB() const
 {
-	return ccBBox(m_pointsMin, m_pointsMax);
+	return ccBBox(m_pointsMin, m_pointsMax, m_numberOfProjectedPoints != 0);
 }
 
 void ccOctree::multiplyBoundingBox(const PointCoordinateType multFactor)
@@ -284,7 +284,7 @@ void ccOctree::draw(CC_DRAW_CONTEXT& context)
 
 bool ccOctree::DrawCellAsABox(	const CCCoreLib::DgmOctree::octreeCell& cell,
 								void** additionalParameters,
-								CCCoreLib::NormalizedProgress* nProgress/*=0*/)
+								CCCoreLib::NormalizedProgress* nProgress/*=nullptr*/)
 {
 	ccOctreeFrustumIntersector* ofi = static_cast<ccOctreeFrustumIntersector*>(additionalParameters[0]);
 	QOpenGLFunctions_2_1* glFunc     = static_cast<QOpenGLFunctions_2_1*>(additionalParameters[1]);
@@ -351,7 +351,7 @@ bool ccOctree::DrawCellAsABox(	const CCCoreLib::DgmOctree::octreeCell& cell,
 
 bool ccOctree::DrawCellAsAPoint(const CCCoreLib::DgmOctree::octreeCell& cell,
 								void** additionalParameters,
-								CCCoreLib::NormalizedProgress* nProgress/*=0*/)
+								CCCoreLib::NormalizedProgress* nProgress/*=nullptr*/)
 {
 	//variables additionnelles
 	glDrawParams* glParams			= reinterpret_cast<glDrawParams*>(additionalParameters[0]);
@@ -386,7 +386,7 @@ bool ccOctree::DrawCellAsAPoint(const CCCoreLib::DgmOctree::octreeCell& cell,
 
 bool ccOctree::DrawCellAsAPrimitive(const CCCoreLib::DgmOctree::octreeCell& cell,
 									void** additionalParameters,
-									CCCoreLib::NormalizedProgress* nProgress/*=0*/)
+									CCCoreLib::NormalizedProgress* nProgress/*=nullptr*/)
 {
 	//variables additionnelles
 	glDrawParams* glParams			= reinterpret_cast<glDrawParams*>(additionalParameters[0]);

@@ -31,7 +31,7 @@
 //system
 #include <cassert>
 
-ccOverlayDialog::ccOverlayDialog(QWidget* parent/*=0*/, Qt::WindowFlags flags/*=Qt::FramelessWindowHint | Qt::Tool*/)
+ccOverlayDialog::ccOverlayDialog(QWidget* parent/*=nullptr*/, Qt::WindowFlags flags/*=Qt::FramelessWindowHint | Qt::Tool*/)
 	: QDialog(parent, flags)
 	, m_associatedWin(nullptr)
 	, m_processing(false)
@@ -85,7 +85,7 @@ bool ccOverlayDialog::linkWith(ccGLWindow* win)
 	return true;
 }
 
-void ccOverlayDialog::onLinkedWindowDeletion(QObject* object/*=0*/)
+void ccOverlayDialog::onLinkedWindowDeletion(QObject* object/*=nullptr*/)
 {
 	if (m_processing)
 		stop(false);
@@ -115,7 +115,7 @@ void ccOverlayDialog::stop(bool accepted)
 
 	linkWith(nullptr);
 
-	emit processFinished(accepted);
+	Q_EMIT processFinished(accepted);
 }
 
 void ccOverlayDialog::reject()
@@ -138,7 +138,7 @@ bool ccOverlayDialog::eventFilter(QObject *obj, QEvent *e)
 
 		if (m_overriddenKeys.contains(keyEvent->key()))
 		{
-			emit shortcutTriggered(keyEvent->key());
+			Q_EMIT shortcutTriggered(keyEvent->key());
 			return true;
 		}
 		else
@@ -150,7 +150,7 @@ bool ccOverlayDialog::eventFilter(QObject *obj, QEvent *e)
 	{
 		if (e->type() == QEvent::Show)
 		{
-			emit shown();
+			Q_EMIT shown();
 		}
 		
 		// standard event processing
