@@ -3864,6 +3864,8 @@ void ccGLWindow::onItemPickedFast(ccHObject* pickedEntity, int pickedItemIndex, 
 
 void ccGLWindow::mousePressEvent(QMouseEvent *event)
 {
+	//return; /* TODO jakob remove */
+
 	m_mouseMoved = false;
 	m_mouseButtonPressed = true;
 	m_ignoreMouseReleaseEvent = false;
@@ -3895,12 +3897,12 @@ void ccGLWindow::mousePressEvent(QMouseEvent *event)
 		//left click = rotation
 		if (m_interactionFlags & INTERACT_ROTATE)
 		{
-			QApplication::setOverrideCursor(QCursor(Qt::PointingHandCursor));
+			QApplication::setOverrideCursor(QCursor(Qt::PointingHandCursor)); 
 		}
 
 		if (m_interactionFlags & INTERACT_SIG_LB_CLICKED)
 		{
-			emit leftButtonClicked(event->x(), event->y());
+			// emit leftButtonClicked(event->x(), event->y());
 		}
 	}
 	if (event->buttons() & Qt::MiddleButton)
@@ -3932,8 +3934,54 @@ void ccGLWindow::mouseDoubleClickEvent(QMouseEvent *event)
 	}
 }
 
+#if 0
 void ccGLWindow::mouseMoveEvent(QMouseEvent *event)
 {
+
+	//return; /* TODO remove jakob */
+	const int x = event->x();
+	const int y = event->y();
+	
+	static CCVector3d s_lastMouseOrientation;
+
+	if (event->buttons() & Qt::LeftButton) //rotatation
+	{
+		ccGLMatrixd rotMat;	
+		CCVector3d currentMouseOrientation = convertMousePositionToOrientation(x, y);
+
+		if (!m_mouseMoved)
+		{
+			//on the first time, we must compute the previous orientation (the camera hasn't moved yet)
+			s_lastMouseOrientation = convertMousePositionToOrientation(m_lastMousePos.x(), m_lastMousePos.y());
+		}
+		// unconstrained rotation following mouse position
+		rotMat = ccGLMatrixd::FromToRotation(s_lastMouseOrientation, currentMouseOrientation);
+
+		s_lastMouseOrientation = currentMouseOrientation;
+		rotateBaseViewMat(rotMat);
+
+		showPivotSymbol(true);
+		QApplication::changeOverrideCursor(QCursor(Qt::ClosedHandCursor));
+
+		//feedback for 'echo' mode
+		emit viewMatRotated(rotMat);
+	}
+
+	m_mouseMoved = true;
+	m_lastMousePos = event->pos();
+
+	event->accept();
+
+	if (m_interactionFlags != INTERACT_TRANSFORM_ENTITIES)
+	{
+		redraw(true);
+	}
+}
+#else
+
+void ccGLWindow::mouseMoveEvent(QMouseEvent *event)
+{
+	// return; /* TODO jakob remove */
 //#define DEBUG_MOUSE_MOVE_FREQ
 #ifdef DEBUG_MOUSE_MOVE_FREQ
 	static QElapsedTimer s_timer;
@@ -3960,13 +4008,14 @@ void ccGLWindow::mouseMoveEvent(QMouseEvent *event)
 
 	if (m_interactionFlags & INTERACT_SIG_MOUSE_MOVED)
 	{
-		emit mouseMoved(x, y, event->buttons());
+		// emit mouseMoved(x, y, event->buttons());
 		event->accept();
 	}
 
 	//no button pressed
 	if (event->buttons() == Qt::NoButton)
 	{
+
 		if (m_interactionFlags & INTERACT_CLICKABLE_ITEMS)
 		{
 			//what would be the size of the 'hot zone' if it was displayed with all options
@@ -3987,7 +4036,6 @@ void ccGLWindow::mouseMoveEvent(QMouseEvent *event)
 			}
 			event->accept();
 		}
-		
 		//display the 3D coordinates of the pixel below the mouse cursor (if possible)
 		if (m_showCursorCoordinates)
 		{
@@ -4109,9 +4157,11 @@ void ccGLWindow::mouseMoveEvent(QMouseEvent *event)
 		else
 		{
 			//specific case: rectangular polyline drawing (for rectangular area selection mode)
-			if (m_allowRectangularEntityPicking
+			if (
+				m_allowRectangularEntityPicking
 				&& (m_pickingMode == ENTITY_PICKING || m_pickingMode == ENTITY_RECT_PICKING)
-				&& (m_rectPickingPoly || (QApplication::keyboardModifiers() & Qt::AltModifier)))
+				&& (m_rectPickingPoly || (QApplication::keyboardModifiers() & Qt::AltModifier))
+			)
 			{
 				//first time: initialization of the rectangle
 				if (!m_rectPickingPoly)
@@ -4346,6 +4396,7 @@ void ccGLWindow::mouseMoveEvent(QMouseEvent *event)
 		redraw(true);
 	}
 }
+#endif;
 
 bool ccGLWindow::processClickableItems(int x, int y)
 {
@@ -4432,6 +4483,7 @@ bool ccGLWindow::processClickableItems(int x, int y)
 
 void ccGLWindow::mouseReleaseEvent(QMouseEvent *event)
 {
+	return;
 	if (m_ignoreMouseReleaseEvent)
 	{
 		m_ignoreMouseReleaseEvent = false;
@@ -4554,7 +4606,15 @@ void ccGLWindow::mouseReleaseEvent(QMouseEvent *event)
 
 void ccGLWindow::doPicking()
 {
+
+	/* TODO jakob remove */
+#if 1
+	ccLog::PrintDebug("abort doPicking");
+	return;
+#else
 	ccLog::PrintDebug("doPicking");
+#endif;
+
 	int x = m_lastMousePos.x();
 	int y = m_lastMousePos.y();
 

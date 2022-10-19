@@ -3727,7 +3727,7 @@ void ccPointCloud::drawMeOnly_new(CC_DRAW_CONTEXT& context)
 void ccPointCloud::drawMeOnly(CC_DRAW_CONTEXT& context)
 {
 	ccLog::PrintDebug("drawMeOnly");
-	drawMeOnly_new(context);
+	drawMeOnly_old(context);
 }
 
 void ccPointCloud::addColorRampInfo(CC_DRAW_CONTEXT& context)
