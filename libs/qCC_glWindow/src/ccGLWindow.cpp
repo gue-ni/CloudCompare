@@ -3865,7 +3865,6 @@ void ccGLWindow::onItemPickedFast(ccHObject* pickedEntity, int pickedItemIndex, 
 void ccGLWindow::mousePressEvent(QMouseEvent *event)
 {
 	//return; /* TODO jakob remove */
-
 	m_mouseMoved = false;
 	m_mouseButtonPressed = true;
 	m_ignoreMouseReleaseEvent = false;
@@ -3934,10 +3933,9 @@ void ccGLWindow::mouseDoubleClickEvent(QMouseEvent *event)
 	}
 }
 
-#if 0
+#if 1
 void ccGLWindow::mouseMoveEvent(QMouseEvent *event)
 {
-
 	//return; /* TODO remove jakob */
 	const int x = event->x();
 	const int y = event->y();
@@ -3960,8 +3958,8 @@ void ccGLWindow::mouseMoveEvent(QMouseEvent *event)
 		s_lastMouseOrientation = currentMouseOrientation;
 		rotateBaseViewMat(rotMat);
 
-		showPivotSymbol(true);
-		QApplication::changeOverrideCursor(QCursor(Qt::ClosedHandCursor));
+		//showPivotSymbol(true);
+		//QApplication::changeOverrideCursor(QCursor(Qt::ClosedHandCursor));
 
 		//feedback for 'echo' mode
 		emit viewMatRotated(rotMat);
@@ -3977,6 +3975,7 @@ void ccGLWindow::mouseMoveEvent(QMouseEvent *event)
 		redraw(true);
 	}
 }
+
 #else
 
 void ccGLWindow::mouseMoveEvent(QMouseEvent *event)
