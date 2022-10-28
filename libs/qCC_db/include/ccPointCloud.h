@@ -33,6 +33,7 @@
 
 //Qt
 #include <QGLBuffer>
+#include <QOpenGLTexture>
 
 class ccScalarField;
 class ccPolyline;
@@ -744,11 +745,10 @@ public: //other methods
 	size_t vboSize() const;
 
 
-	//QGLBuffer arrayBuf(QGLBuffer::VertexBuffer);
 	QGLBuffer *arrayBuf = nullptr; 
-	QGLBuffer *indexBuf = nullptr; 
+	QOpenGLTexture *texture = nullptr;	
+	GLuint texture_id = -1;
 
-	GLuint texture;
 
 
 protected:

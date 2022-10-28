@@ -140,3 +140,5 @@ CCCoreLibExport.h
 /out/
 plugins/private
 install
+install_saved/
+build-cloudcompare.bat

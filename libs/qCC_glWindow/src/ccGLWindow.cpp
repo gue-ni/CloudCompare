@@ -874,7 +874,25 @@ bool ccGLWindow::initialize()
 						&&	context()->hasExtension(QByteArrayLiteral("GL_ARB_vertex_shader"))
 						&&	context()->hasExtension(QByteArrayLiteral("GL_ARB_fragment_shader"));
 
+		bool compatibility = context()->hasExtension(QByteArrayLiteral("GL_ARB_compatibility"));
+		if (compatibility)
+		{
+				ccLog::Warning("[3D View %i] GL_ARB_compatibility available", m_uniqueID);
+		}
+
 		m_computeShadersEnabled = context()->hasExtension(QByteArrayLiteral("GL_ARB_compute_shader"));
+
+		if (!m_computeShadersEnabled)
+		{
+			if (!m_silentInitialization)
+				ccLog::Warning("[3D View %i] Compute Shaders unavailable", m_uniqueID);
+
+		}
+		else
+		{
+			if (!m_silentInitialization)
+				ccLog::Print("[3D View %i] Compute Shaders available", m_uniqueID);
+		}
 
 		if (!m_shadersEnabled)
 		{
@@ -952,23 +970,27 @@ bool ccGLWindow::initialize()
 				}
 			}
 
-			// TODO add compute shader if possible
 			if (m_computeShadersEnabled) {
 				ccLog::PrintDebug("Compute Shaders enabled");
 
 				if (!m_customComputeShader) {
-					const QString shaderPath = QStringLiteral( "%1/Compute/compute.comp" ).arg( *s_shaderPath );
+					const QString shaderPath = QStringLiteral( "%1/2/shader.comp" ).arg( *s_shaderPath );
 					
 					ccShader* shader = new ccShader();
 					QString error;
 					if (!shader->loadProgram(shaderPath, error))
 					{
-						ccLog::Warning(QString("[3D View %1] Failed to load compute shader").arg(m_uniqueID));
+						ccLog::Warning(QString("[3D View %1] Failed to load compute shader: %2").arg(m_uniqueID).arg(error));
+						delete shader;
 					}
-					else {
+					else 
+					{
+						ccLog::PrintDebug("Loaded compute shader ");
 						m_customComputeShader = shader;
-						ccLog::PrintDebug("Loaded compute shader");
 					}
+				}
+				else {
+					ccLog::PrintDebug("compute shader already loaded");
 				}
 			}
 			else {
@@ -976,7 +998,7 @@ bool ccGLWindow::initialize()
 			}
 
 			if (!m_customRenderingShader) {
-				const QString shaderPath = QStringLiteral( "%1/PointCloud" ).arg( *s_shaderPath );
+				const QString shaderPath = QStringLiteral( "%1/2" ).arg( *s_shaderPath );
 				ccShader* shader = new ccShader();
 				QString error;
 				if (!shader->fromFile(shaderPath, "shader", error))
@@ -3933,7 +3955,8 @@ void ccGLWindow::mouseDoubleClickEvent(QMouseEvent *event)
 	}
 }
 
-#if 1
+#define ROTATION_ONLY 
+#ifdef ROTATION_ONLY
 void ccGLWindow::mouseMoveEvent(QMouseEvent *event)
 {
 	//return; /* TODO remove jakob */
@@ -3958,8 +3981,10 @@ void ccGLWindow::mouseMoveEvent(QMouseEvent *event)
 		s_lastMouseOrientation = currentMouseOrientation;
 		rotateBaseViewMat(rotMat);
 
+		// this causes CloudCompare to crash
 		//showPivotSymbol(true);
-		//QApplication::changeOverrideCursor(QCursor(Qt::ClosedHandCursor));
+
+		QApplication::changeOverrideCursor(QCursor(Qt::ClosedHandCursor));
 
 		//feedback for 'echo' mode
 		emit viewMatRotated(rotMat);

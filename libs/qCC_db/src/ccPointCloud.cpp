@@ -27,6 +27,12 @@
 #include <ManualSegmentationTools.h>
 #include <ReferenceCloud.h>
 
+// TODO remove
+
+#include <iostream>
+#include <fstream>
+#include <sstream>
+
 
 //local
 #include "cc2DLabel.h"
@@ -2624,185 +2630,163 @@ void ccPointCloud::drawMeOnly_test(CC_DRAW_CONTEXT& context)
 	QOpenGLFunctions_4_3_Core* glFunc = context.glFunctions<QOpenGLFunctions_4_3_Core>();
 	assert(glFunc != nullptr);
 
-	float mv_f[16], proj_f[16];
-	
-	glFunc->glGetFloatv(GL_PROJECTION_MATRIX, proj_f);
-	glFunc->glGetFloatv(GL_MODELVIEW_MATRIX, mv_f);
-
-	/*
-	for (int i = 0; i < 16; i++) {
-		ccLog::PrintDebug(QString("[%1] mv: %2, p: %3").arg(i).arg(mv_f[i]).arg(proj_f[i]));
+#if 0
+	if (context.qGLContext->hasExtension(QByteArrayLiteral("GL_ARB_compute_shader")))
+	{
+		ccLog::PrintDebug("has shader");
 	}
-	*/
+	else {
+		ccLog::PrintDebug("no shader");
+	}
+#endif
+	
+	static unsigned int computeShaderId = 0;
+	if (computeShaderId == 0)
+	{
+		std::string path = "shaders/2/shader.comp";
+		std::ifstream cShaderFile;
+		cShaderFile.open(path);
+		if (!cShaderFile.is_open())
+		{
+			ccLog::PrintDebug(QString("could not open file"));
+		}
+
+		std::string computeCode;
+
+		std::stringstream cShaderStream;
+		// read file's buffer contents into streams
+		cShaderStream << cShaderFile.rdbuf();
+		// close file handlers
+		cShaderFile.close();
+		// convert stream into string
+		computeCode = cShaderStream.str();
+		const char* cShaderCode = computeCode.c_str();
+
+		unsigned int compute = glFunc->glCreateShader(GL_COMPUTE_SHADER);
+		glFunc->glShaderSource(compute, 1, &cShaderCode, NULL);
+		glFunc->glCompileShader(compute);
+		//glFunc->checkCompileErrors(id, "COMPUTE");
+
+		computeShaderId = glFunc->glCreateProgram();
+		glFunc->glAttachShader(computeShaderId, compute);
+		glFunc->glLinkProgram(computeShaderId);
+		//glFunc->checkCompileErrors(ID, "PROGRAM");
+		// delete the shaders as they're linked into our program now and no longer necessery
+		glFunc->glDeleteShader(compute);
+	}
+
+	float modelViewArray[16], projectionArray[16];
+	
+	glFunc->glGetFloatv(GL_PROJECTION_MATRIX, projectionArray);
+	glFunc->glGetFloatv(GL_MODELVIEW_MATRIX, modelViewArray);
+
+	QMatrix4x4 modelViewMat(modelViewArray);
+	QMatrix4x4 projectionMat(projectionArray);
 
 	// https://doc.qt.io/archives/qt-5.9/qtopengl-cube-mainwidget-cpp.html
 
 	if (MACRO_Draw3D(context)) {
-		ccLog::PrintDebug("drawMeOnly_test");
 
 		if (arrayBuf == nullptr) {
 			arrayBuf = new QGLBuffer(QGLBuffer::VertexBuffer);
 		}
 
-		if (indexBuf == nullptr) {
-			indexBuf = new QGLBuffer(QGLBuffer::IndexBuffer);
-		}
+		const unsigned int texture_width = 512;
+		const unsigned int texture_height = 512;
 
-		if (!arrayBuf->isCreated()) {
-			ccLog::PrintDebug("create array buf");
-			arrayBuf->create();
+		//if (texture == nullptr)
+		if (texture_id == -1)
+		{
+			//texture = new QOpenGLTexture(QOpenGLTexture::Target2D);
 
-			/*
-			GLfloat vertices[] = {
-				-0.5f, -0.5f, 0.0f, // bottom left
-				 0.5f, -0.5f, 0.0f, // bottom right
-				-0.5f,  0.5f, 0.0f, // top left
-
-				 0.5f, -0.5f, 0.0f, // bottom right
-				 0.5f,  0.5f, 0.0f, // top right
-				-0.5f,  0.5f, 0.0f, // top left
-			};
-			*/
-
-			GLfloat vertices[] = {
-				// positions          
-				/*
-				  0.5f,  0.5f, 0.0f,   // top right
-				  0.5f, -0.5f, 0.0f,  // bottom right
-				 -0.5f, -0.5f, 0.0f,  // bottom left
-				 -0.5f,  0.5f, 0.0f,   // top left 
-				 */
-
-
-				-0.5f, -0.5f , 0.0f, 0.0f, 0.0f,
-				-0.5f,  0.5f , 0.0f, 0.0f, 1.0f,
-				 0.5f,  0.5f , 0.0f, 1.0f, 1.0f,
-				 0.5f, -0.5f , 0.0f, 1.0f, 0.0f,
-			};
-
-			arrayBuf->bind();
-			arrayBuf->allocate(vertices, sizeof(vertices));
-			arrayBuf->setUsagePattern(QGLBuffer::DynamicDraw);
-			
-			int tex_w = context.glW, tex_h = context.glH;
-
-			ccLog::PrintDebug(QString("w: %1, h: %2").arg(tex_w).arg(tex_h));
-
-			/*
-			glFunc->glCreateTextures(GL_TEXTURE_2D, 1, &texture);
-			glFunc->glTextureParameteri(screenTex, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-			glFunc->glTextureParameteri(screenTex, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-			glFunc->glTextureParameteri(screenTex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glFunc->glTextureParameteri(screenTex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			glFunc->glTextureStorage2D(screenTex, 1, GL_RGBA32F, tex_w, tex_h);
-			glFunc->glBindImageTexture(0, screenTex, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
-
-
-			int work_grp_cnt[3];
-			glFunc->glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 0, &work_grp_cnt[0]);
-			glFunc->glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 1, &work_grp_cnt[1]);
-			glFunc->glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 2, &work_grp_cnt[2]);
-			*/
-			/*
-			std::cout << "Max work groups per compute shader" <<
-				" x:" << work_grp_cnt[0] <<
-				" y:" << work_grp_cnt[1] <<
-				" z:" << work_grp_cnt[2] << "\n";
-			*/
-
-			/*
-			int work_grp_size[3];
-			glFunc->glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, 0, &work_grp_size[0]);
-			glFunc->glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, 1, &work_grp_size[1]);
-			glFunc->glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, 2, &work_grp_size[2]);
-			*/
-			/*
-			std::cout << "Max work group sizes" <<
-				" x:" << work_grp_size[0] <<
-				" y:" << work_grp_size[1] <<
-				" z:" << work_grp_size[2] << "\n";
-			*/
-
-			int work_grp_inv;
-			glFunc->glGetIntegerv(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS, &work_grp_inv);
-	
-			
-			/*
-			glFunc->glGenTextures(1, &texture);
+			glFunc->glGenTextures(1, &texture_id);
 			glFunc->glActiveTexture(GL_TEXTURE0);
-			glFunc->glBindTexture(GL_TEXTURE_2D, texture);
+			glFunc->glBindTexture(GL_TEXTURE_2D, texture_id);
 			glFunc->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 			glFunc->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 			glFunc->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 			glFunc->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glFunc->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, tex_w, tex_h, 0, GL_RGBA, GL_FLOAT, NULL);
-			glFunc->glBindImageTexture(0, texture, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
-			*/
+			glFunc->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, texture_width, texture_height, 0, GL_RGBA, GL_FLOAT, NULL);
+			glFunc->glBindImageTexture(0, texture_id, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+			glFunc->glActiveTexture(GL_TEXTURE0);
+			glFunc->glBindTexture(GL_TEXTURE_2D, texture_id);
 
+			if (glFunc->glGetError() != GL_NO_ERROR)
+			{
+				ccLog::PrintDebug("error during texture creation");
+			}
 		}
-		else {
-			ccLog::PrintDebug("array buf already created");
-		}
 
-		if (!indexBuf->isCreated()) {
-			indexBuf->create();
+		if (!arrayBuf->isCreated()) {
+			arrayBuf->create();
 
-			GLuint indices[] = {
-				0, 1, 3, // first triangle
-				1, 2, 3  // second triangle
+			const float quad[] = {
+				// positions        // texture Coords
+				-1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
+				-1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+				 1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
+				 1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
 			};
 
-			indexBuf->bind();
-			indexBuf->allocate(indices, sizeof(indices));
+			arrayBuf->bind();
+			arrayBuf->allocate(quad, sizeof(quad));
+			arrayBuf->setUsagePattern(QGLBuffer::StaticDraw);
 		}
 
-		ccShader* shader = context.customRenderingShader; 
+		ccShader* shader		= context.customRenderingShader; 
 		ccShader* computeShader = context.customComputeShader; 
 
 		if (shader && computeShader) {
+#define USE_COMP 1
+#if USE_COMP
+
+
+			glFunc->glUseProgram(computeShaderId);
+
 			//computeShader->bind();
-			
-			//glFunc->glDispatchCompute(ceil(context.glW / 8), ceil(context.glH / 4), 1);
-			//glFunc->glMemoryBarrier(GL_ALL_BARRIER_BITS);
+			//computeShader->setUniformValue(shader->uniformLocation("Texture"), texture_id);
+
+			glFunc->glActiveTexture(GL_TEXTURE0);
+			glFunc->glBindTexture(GL_TEXTURE_2D, texture_id);
+
+			glFunc->glDispatchCompute(texture_width, texture_width, 1);
+			glFunc->glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
+#endif
+			arrayBuf->bind();
 
 			shader->bind();
-			//glFunc->glBindTextureUnit(0, texture);
-
-
-
-			if (!arrayBuf->bind()) {
-				ccLog::PrintDebug("bind array buf failed");
-			}
+			
+			//glFunc->glBindTexture(GL_TEXTURE_2D, texture_id);
 
 			shader->enableAttributeArray("Pos");
 			shader->setAttributeBuffer("Pos", GL_FLOAT, 0, 3, 5 * sizeof(GLfloat));
 
-			shader->enableAttributeArray("UVs");
-			shader->setAttributeBuffer("UVs", GL_FLOAT, 3 * sizeof(GLfloat), 2, 5 * sizeof(GLfloat));
-
-
-
-				
-			QMatrix4x4 mat1(mv_f);
-			QMatrix4x4 mat2(proj_f);
-
-			shader->setUniformValue(shader->uniformLocation("ModelView"), mat1);
-			shader->setUniformValue(shader->uniformLocation("Projection"), mat2);
+			shader->enableAttributeArray("Tex");
+			shader->setAttributeBuffer("Tex", GL_FLOAT, 3 * sizeof(GLfloat), 2, 5 * sizeof(GLfloat));
 			
-			shader->setUniformValue(shader->uniformLocation("Tex"), texture);
+#if USE_COMP
+			//shader->setUniformValue(shader->uniformLocation("Texture"), texture_id);
+#endif
 
+			//shader->setUniformValue(shader->uniformLocation("ModelView"), modelViewMat);
+			//shader->setUniformValue(shader->uniformLocation("Projection"), projectionMat);
+
+#define WIREFRAME 0
+#if WIREFRAME 
 			glFunc->glPolygonMode(GL_FRONT, GL_LINE);
 			glFunc->glPolygonMode(GL_BACK, GL_LINE);
-
-			//glFunc->glDrawArrays(GL_TRIANGLES, 0, 6);
-
-			ccLog::PrintDebug("glDrawElements");
-			glFunc->glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
+#endif
+			glFunc->glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+#if WIREFRAME 
 			glFunc->glPolygonMode(GL_FRONT, GL_FILL);
 			glFunc->glPolygonMode(GL_BACK, GL_FILL);
+#endif
 
 			glFunc->glUseProgram(0);
+#if USE_COMP
+			glFunc->glBindTexture(GL_TEXTURE_2D, 0);
+#endif 
 		}
 		else {
 			ccLog::PrintDebug("no shader");
@@ -2826,14 +2810,14 @@ void ccPointCloud::drawMeOnly_old(CC_DRAW_CONTEXT& context)
 		return;
 
 	/*
-	float mv_f[16];
-	float proj_f[16];
+	float modelViewArray[16];
+	float projectionArray[16];
 	
-	glFunc->glGetFloatv(GL_PROJECTION_MATRIX, proj_f);
-	glFunc->glGetFloatv(GL_MODELVIEW_MATRIX, mv_f);
+	glFunc->glGetFloatv(GL_PROJECTION_MATRIX, projectionArray);
+	glFunc->glGetFloatv(GL_MODELVIEW_MATRIX, modelViewArray);
 
 	for (int i = 0; i < 16; i++) {
-		ccLog::PrintDebug(QString("[%1] mv: %2, p: %3").arg(i).arg(mv_f[i]).arg(proj_f[i]));
+		ccLog::PrintDebug(QString("[%1] mv: %2, p: %3").arg(i).arg(modelViewArray[i]).arg(projectionArray[i]));
 	}
 	*/
 
@@ -3508,16 +3492,25 @@ void ccPointCloud::drawMeOnly_new(CC_DRAW_CONTEXT& context)
 	QOpenGLFunctions_4_3_Core* glFunc = context.glFunctions<QOpenGLFunctions_4_3_Core>();
 	assert(glFunc != nullptr);
 
-
-	float mv_f[16];
-	float proj_f[16];
+#if 1
+	static float modelViewArray[16];
+	static float projectionArray[16];
 	
-	glFunc->glGetFloatv(GL_PROJECTION_MATRIX, proj_f);
-	glFunc->glGetFloatv(GL_MODELVIEW_MATRIX, mv_f);
+	glFunc->glGetFloatv(GL_MODELVIEW_MATRIX, modelViewArray);
+	glFunc->glGetFloatv(GL_PROJECTION_MATRIX, projectionArray);
+
+	QMatrix4x4 modelViewMat(modelViewArray);
+	QMatrix4x4 projectionMat(projectionArray);
+#else
+	ccGLMatrix modelViewMat;
+	ccGLMatrix projectionMat;
+	glFunc->glGetFloatv(GL_MODELVIEW_MATRIX, modelViewMat.data());
+	glFunc->glGetFloatv(GL_PROJECTION_MATRIX, projectionMat.data());
+#endif
 
 	/*
 	for (int i = 0; i < 16; i++) {
-		ccLog::PrintDebug(QString("[%1] mv: %2, p: %3").arg(i).arg(mv_f[i]).arg(proj_f[i]));
+		ccLog::PrintDebug(QString("[%1] mv: %2, p: %3").arg(i).arg(modelViewArray[i]).arg(projectionArray[i]));
 	}
 	*/
 
@@ -3537,9 +3530,6 @@ void ccPointCloud::drawMeOnly_new(CC_DRAW_CONTEXT& context)
 
 		//can't display a SF without... a SF... and an active color scale!
 		assert(!glParams.showSF || hasDisplayedScalarField());
-
-
-
 
 		// L.O.D. display
 		DisplayDesc toDisplay(0, size());
@@ -3579,7 +3569,6 @@ void ccPointCloud::drawMeOnly_new(CC_DRAW_CONTEXT& context)
 					{
 						if (context.currentLODLevel == 0)
 						{
-							ccLog::PrintDebug("get matrices");
 							//get the current viewport and OpenGL matrices
 							ccGLCameraParameters camera;
 							context.display->getGLCameraParameters(camera);
@@ -3643,12 +3632,25 @@ void ccPointCloud::drawMeOnly_new(CC_DRAW_CONTEXT& context)
 		}
 
 		// simplified display prodcedure 
-
 		{
 			bool useVBOs = context.useVBOs && !toDisplay.indexMap ? updateVBOs2(context, glParams) : false; //VBOs are not compatible with LoD
 			ccLog::PrintDebug(QString("useVBO: %1").arg(useVBOs));
 
 			size_t chunkCount = ccChunk::Count(m_points);
+
+			ccShader* shader = nullptr;
+			if (context.customRenderingShader) {
+				ccLog::PrintDebug("Binding Rendering shader");
+
+				shader = context.customRenderingShader; 
+
+				shader->bind();
+				shader->setUniformValue(shader->uniformLocation("ModelView"), modelViewMat);
+				shader->setUniformValue(shader->uniformLocation("Projection"), projectionMat);
+			}
+			else {
+				ccLog::PrintDebug("No custom shader");
+			}
 
 			for (size_t k = 0; k < chunkCount; ++k)
 			{
@@ -3663,13 +3665,8 @@ void ccPointCloud::drawMeOnly_new(CC_DRAW_CONTEXT& context)
 					ccLog::PrintDebug("No compute shader is set");
 				}
 
-				if (context.customRenderingShader) {
-					ccLog::PrintDebug("Binding shader");
-
-					ccShader* shader = context.customRenderingShader; 
-
-					shader->bind();
-					
+				if (shader) {
+					// can this also be moved outside the loop?
 					shader->enableAttributeArray("Pos");
 					shader->setAttributeBuffer("Pos", GL_FLOAT, 0, 3, 0);
 
@@ -3677,25 +3674,7 @@ void ccPointCloud::drawMeOnly_new(CC_DRAW_CONTEXT& context)
 					shader->setAttributeBuffer("Color", GL_UNSIGNED_BYTE, m_vboManager.vbos[k]->rgbShift, 4, 0);
 
 					// TODO normals
-						
-					QMatrix4x4 mat1(mv_f);
-					QMatrix4x4 mat2(proj_f);
-
-					/*
-					ccLog::PrintDebug("Befor drawing:");
-					for (int i = 0; i < 16; i++) {
-						ccLog::PrintDebug(QString("[%1] mv: %2, p: %3").arg(i).arg(mv_f[i]).arg(proj_f[i]));
-					}
-					*/
-
-					shader->setUniformValue(shader->uniformLocation("ModelView"), mat1);
-					shader->setUniformValue(shader->uniformLocation("Projection"), mat2);
-
 				}
-				else {
-					ccLog::PrintDebug("No custom shader");
-				}
-
 
 				if (toDisplay.decimStep > 1)
 				{
@@ -3721,13 +3700,12 @@ void ccPointCloud::drawMeOnly_new(CC_DRAW_CONTEXT& context)
 		}
 
 	}
-
 }
 
 void ccPointCloud::drawMeOnly(CC_DRAW_CONTEXT& context)
 {
 	ccLog::PrintDebug("drawMeOnly");
-	drawMeOnly_new(context);
+	drawMeOnly_test(context);
 }
 
 void ccPointCloud::addColorRampInfo(CC_DRAW_CONTEXT& context)

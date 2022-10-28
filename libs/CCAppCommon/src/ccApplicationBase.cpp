@@ -59,6 +59,7 @@ void ccApplicationBase::initOpenGL()
 
 		format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
 		format.setStencilBufferSize(0);
+		// format.setProfile(QSurfaceFormat::CompatibilityProfile);
 
 #ifdef CC_GL_WINDOW_USE_QWINDOW
 		format.setStereo(true);

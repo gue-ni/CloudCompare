@@ -73,7 +73,12 @@ bool ccShader::loadProgram(QString computeShaderFile, QString& error)
 		error = log();
 		return false;
 	}
-	
+
+	if (!link())
+	{
+		error = log();
+		return false;
+	}
 
 	return true;
 
