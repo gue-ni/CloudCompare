@@ -2640,8 +2640,7 @@ void ccPointCloud::drawMeOnly_test(CC_DRAW_CONTEXT& context)
 	}
 #endif
 	
-	static unsigned int computeShaderId = 0;
-	if (computeShaderId == 0)
+	if (renderShader == 0)
 	{
 		std::string path = "shaders/2/shader.comp";
 		std::ifstream cShaderFile;
@@ -2654,24 +2653,20 @@ void ccPointCloud::drawMeOnly_test(CC_DRAW_CONTEXT& context)
 		std::string computeCode;
 
 		std::stringstream cShaderStream;
-		// read file's buffer contents into streams
 		cShaderStream << cShaderFile.rdbuf();
-		// close file handlers
 		cShaderFile.close();
-		// convert stream into string
 		computeCode = cShaderStream.str();
 		const char* cShaderCode = computeCode.c_str();
 
-		unsigned int compute = glFunc->glCreateShader(GL_COMPUTE_SHADER);
+		GLuint compute = glFunc->glCreateShader(GL_COMPUTE_SHADER);
 		glFunc->glShaderSource(compute, 1, &cShaderCode, NULL);
 		glFunc->glCompileShader(compute);
 		//glFunc->checkCompileErrors(id, "COMPUTE");
 
-		computeShaderId = glFunc->glCreateProgram();
-		glFunc->glAttachShader(computeShaderId, compute);
-		glFunc->glLinkProgram(computeShaderId);
+		renderShader = glFunc->glCreateProgram();
+		glFunc->glAttachShader(renderShader, compute);
+		glFunc->glLinkProgram(renderShader);
 		//glFunc->checkCompileErrors(ID, "PROGRAM");
-		// delete the shaders as they're linked into our program now and no longer necessery
 		glFunc->glDeleteShader(compute);
 	}
 
@@ -2697,8 +2692,6 @@ void ccPointCloud::drawMeOnly_test(CC_DRAW_CONTEXT& context)
 		//if (texture == nullptr)
 		if (texture_id == -1)
 		{
-			//texture = new QOpenGLTexture(QOpenGLTexture::Target2D);
-
 			glFunc->glGenTextures(1, &texture_id);
 			glFunc->glActiveTexture(GL_TEXTURE0);
 			glFunc->glBindTexture(GL_TEXTURE_2D, texture_id);
@@ -2740,11 +2733,10 @@ void ccPointCloud::drawMeOnly_test(CC_DRAW_CONTEXT& context)
 #define USE_COMP 1
 #if USE_COMP
 
-
-			glFunc->glUseProgram(computeShaderId);
+			glFunc->glUseProgram(renderShader);
 
 			//computeShader->bind();
-			//computeShader->setUniformValue(shader->uniformLocation("Texture"), texture_id);
+			//computeShader->setUniformValue(shader->uniformLocation("Texture"), 0);
 
 			glFunc->glActiveTexture(GL_TEXTURE0);
 			glFunc->glBindTexture(GL_TEXTURE_2D, texture_id);
@@ -3517,7 +3509,7 @@ void ccPointCloud::drawMeOnly_new(CC_DRAW_CONTEXT& context)
 	if (glFunc == nullptr)
 		return;
 
-	if (MACRO_Draw3D(context))
+	if (MACRO_Draw3D(context) || true)
 	{
 		ccLog::PrintDebug("Draw3D");
 		glDrawParams glParams;
@@ -3672,15 +3664,13 @@ void ccPointCloud::drawMeOnly_new(CC_DRAW_CONTEXT& context)
 
 					shader->enableAttributeArray("Color");
 					shader->setAttributeBuffer("Color", GL_UNSIGNED_BYTE, m_vboManager.vbos[k]->rgbShift, 4, 0);
-
-					// TODO normals
 				}
 
 				if (toDisplay.decimStep > 1)
 				{
 					chunkSize = static_cast<unsigned>(floor(static_cast<float>(chunkSize) / toDisplay.decimStep));
 				}
-				//ccLog::PrintDebug(QString("glDrawArrays, %1 points").arg(static_cast<GLsizei>(chunkSize)));
+				ccLog::PrintDebug(QString("glDrawArrays, %1 points").arg(static_cast<GLsizei>(chunkSize)));
 				glFunc->glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(chunkSize));
 			}
 
@@ -3704,8 +3694,7 @@ void ccPointCloud::drawMeOnly_new(CC_DRAW_CONTEXT& context)
 
 void ccPointCloud::drawMeOnly(CC_DRAW_CONTEXT& context)
 {
-	ccLog::PrintDebug("drawMeOnly");
-	drawMeOnly_test(context);
+	drawMeOnly_new(context);
 }
 
 void ccPointCloud::addColorRampInfo(CC_DRAW_CONTEXT& context)

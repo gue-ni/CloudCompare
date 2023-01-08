@@ -745,9 +745,14 @@ public: //other methods
 	size_t vboSize() const;
 
 
+	// TODO(jakob)
 	QGLBuffer *arrayBuf = nullptr; 
 	QOpenGLTexture *texture = nullptr;	
 	GLuint texture_id = -1;
+	GLuint renderShader = 0;
+	GLuint resolveShader = 0;
+	GLuint ubFramebuffer = 0;
+	GLuint ubPointData = 0;
 
 
 
