@@ -749,10 +749,9 @@ public: //other methods
 	QGLBuffer *arrayBuf = nullptr; 
 	QOpenGLTexture *texture = nullptr;	
 	GLuint texture_id = -1;
-	GLuint renderShader = 0;
-	GLuint resolveShader = 0;
-	GLuint ubFramebuffer = 0;
-	GLuint ubPointData = 0;
+	GLuint renderShader = -1;
+	GLuint resolveShader = -1;
+	GLuint ssboFramebuffer = -1;
 
 
 

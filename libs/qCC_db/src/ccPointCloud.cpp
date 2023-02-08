@@ -2630,6 +2630,10 @@ void ccPointCloud::drawMeOnly_test(CC_DRAW_CONTEXT& context)
 	QOpenGLFunctions_4_3_Core* glFunc = context.glFunctions<QOpenGLFunctions_4_3_Core>();
 	assert(glFunc != nullptr);
 
+	const unsigned int texture_width = 512;
+	const unsigned int texture_height = 512;
+
+
 #if 0
 	if (context.qGLContext->hasExtension(QByteArrayLiteral("GL_ARB_compute_shader")))
 	{
@@ -2640,7 +2644,7 @@ void ccPointCloud::drawMeOnly_test(CC_DRAW_CONTEXT& context)
 	}
 #endif
 	
-	if (renderShader == 0)
+	if (renderShader == -1)
 	{
 		std::string path = "shaders/2/shader.comp";
 		std::ifstream cShaderFile;
@@ -2670,6 +2674,13 @@ void ccPointCloud::drawMeOnly_test(CC_DRAW_CONTEXT& context)
 		glFunc->glDeleteShader(compute);
 	}
 
+	if (ssboFramebuffer == 0)
+	{
+		//GLuint numPixels = texture_width * texture_height;
+		//glFunc->glGenBuffers(1, &ssboFramebuffer);
+		//glFunc->glBufferData(ssboFramebuffer, numPixels, frame);
+	}
+
 	float modelViewArray[16], projectionArray[16];
 	
 	glFunc->glGetFloatv(GL_PROJECTION_MATRIX, projectionArray);
@@ -2686,8 +2697,6 @@ void ccPointCloud::drawMeOnly_test(CC_DRAW_CONTEXT& context)
 			arrayBuf = new QGLBuffer(QGLBuffer::VertexBuffer);
 		}
 
-		const unsigned int texture_width = 512;
-		const unsigned int texture_height = 512;
 
 		//if (texture == nullptr)
 		if (texture_id == -1)
@@ -2735,14 +2744,11 @@ void ccPointCloud::drawMeOnly_test(CC_DRAW_CONTEXT& context)
 
 			glFunc->glUseProgram(renderShader);
 
-			//computeShader->bind();
-			//computeShader->setUniformValue(shader->uniformLocation("Texture"), 0);
-
 			glFunc->glActiveTexture(GL_TEXTURE0);
 			glFunc->glBindTexture(GL_TEXTURE_2D, texture_id);
 
 			glFunc->glDispatchCompute(texture_width, texture_width, 1);
-			glFunc->glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+			glFunc->glMemoryBarrier(GL_ALL_BARRIER_BITS);
 
 #endif
 			arrayBuf->bind();
@@ -3522,10 +3528,10 @@ void ccPointCloud::drawMeOnly_new(CC_DRAW_CONTEXT& context)
 
 		//can't display a SF without... a SF... and an active color scale!
 		assert(!glParams.showSF || hasDisplayedScalarField());
-
 		// L.O.D. display
 		DisplayDesc toDisplay(0, size());
 
+#if 0
 		if (	context.decimateCloudOnMove
 			&&	toDisplay.count > context.minLODPointCount
 			&&	MACRO_LODActivated(context)
@@ -3616,7 +3622,7 @@ void ccPointCloud::drawMeOnly_new(CC_DRAW_CONTEXT& context)
 				}
 			}
 		}
-
+#endif
 		//custom point size?
 		if (m_pointSize != 0)
 		{
@@ -3694,7 +3700,7 @@ void ccPointCloud::drawMeOnly_new(CC_DRAW_CONTEXT& context)
 
 void ccPointCloud::drawMeOnly(CC_DRAW_CONTEXT& context)
 {
-	drawMeOnly_new(context);
+	drawMeOnly_test(context);
 }
 
 void ccPointCloud::addColorRampInfo(CC_DRAW_CONTEXT& context)

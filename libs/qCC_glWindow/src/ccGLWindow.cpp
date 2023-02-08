@@ -998,6 +998,7 @@ bool ccGLWindow::initialize()
 			}
 
 			if (!m_customRenderingShader) {
+				// TODO(jakob): update this
 				const QString shaderPath = QStringLiteral( "%1/2" ).arg( *s_shaderPath );
 				ccShader* shader = new ccShader();
 				QString error;
