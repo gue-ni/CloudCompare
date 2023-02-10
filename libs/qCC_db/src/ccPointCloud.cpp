@@ -2644,7 +2644,7 @@ void ccPointCloud::drawMeOnly_test(CC_DRAW_CONTEXT& context)
 	}
 #endif
 	
-	if (renderShader == -1)
+	if (renderShader == 0)
 	{
 		std::string path = "shaders/2/shader.comp";
 		std::ifstream cShaderFile;
@@ -2665,12 +2665,10 @@ void ccPointCloud::drawMeOnly_test(CC_DRAW_CONTEXT& context)
 		GLuint compute = glFunc->glCreateShader(GL_COMPUTE_SHADER);
 		glFunc->glShaderSource(compute, 1, &cShaderCode, NULL);
 		glFunc->glCompileShader(compute);
-		//glFunc->checkCompileErrors(id, "COMPUTE");
 
 		renderShader = glFunc->glCreateProgram();
 		glFunc->glAttachShader(renderShader, compute);
 		glFunc->glLinkProgram(renderShader);
-		//glFunc->checkCompileErrors(ID, "PROGRAM");
 		glFunc->glDeleteShader(compute);
 	}
 
@@ -2697,9 +2695,7 @@ void ccPointCloud::drawMeOnly_test(CC_DRAW_CONTEXT& context)
 			arrayBuf = new QGLBuffer(QGLBuffer::VertexBuffer);
 		}
 
-
-		//if (texture == nullptr)
-		if (texture_id == -1)
+		if (texture_id == 0)
 		{
 			glFunc->glGenTextures(1, &texture_id);
 			glFunc->glActiveTexture(GL_TEXTURE0);
@@ -2739,8 +2735,6 @@ void ccPointCloud::drawMeOnly_test(CC_DRAW_CONTEXT& context)
 		ccShader* computeShader = context.customComputeShader; 
 
 		if (shader && computeShader) {
-#define USE_COMP 1
-#if USE_COMP
 
 			glFunc->glUseProgram(renderShader);
 
@@ -2750,7 +2744,6 @@ void ccPointCloud::drawMeOnly_test(CC_DRAW_CONTEXT& context)
 			glFunc->glDispatchCompute(texture_width, texture_width, 1);
 			glFunc->glMemoryBarrier(GL_ALL_BARRIER_BITS);
 
-#endif
 			arrayBuf->bind();
 
 			shader->bind();
@@ -2762,13 +2755,10 @@ void ccPointCloud::drawMeOnly_test(CC_DRAW_CONTEXT& context)
 
 			shader->enableAttributeArray("Tex");
 			shader->setAttributeBuffer("Tex", GL_FLOAT, 3 * sizeof(GLfloat), 2, 5 * sizeof(GLfloat));
-			
-#if USE_COMP
-			//shader->setUniformValue(shader->uniformLocation("Texture"), texture_id);
-#endif
 
-			//shader->setUniformValue(shader->uniformLocation("ModelView"), modelViewMat);
-			//shader->setUniformValue(shader->uniformLocation("Projection"), projectionMat);
+			shader->setUniformValue(shader->uniformLocation("Texture"), 0);
+			
+
 
 #define WIREFRAME 0
 #if WIREFRAME 
@@ -2781,10 +2771,8 @@ void ccPointCloud::drawMeOnly_test(CC_DRAW_CONTEXT& context)
 			glFunc->glPolygonMode(GL_BACK, GL_FILL);
 #endif
 
-			glFunc->glUseProgram(0);
-#if USE_COMP
 			glFunc->glBindTexture(GL_TEXTURE_2D, 0);
-#endif 
+			glFunc->glUseProgram(0);
 		}
 		else {
 			ccLog::PrintDebug("no shader");
