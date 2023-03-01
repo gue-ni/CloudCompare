@@ -970,35 +970,6 @@ bool ccGLWindow::initialize()
 				}
 			}
 
-#if 0
-			if (m_computeShadersEnabled) {
-				ccLog::PrintDebug("Compute Shaders enabled");
-
-				if (!m_customComputeShader) {
-					const QString shaderPath = QStringLiteral( "%1/2/shader.comp" ).arg( *s_shaderPath );
-					
-					ccShader* shader = new ccShader();
-					QString error;
-					if (!shader->loadProgram(shaderPath, error))
-					{
-						ccLog::Warning(QString("[3D View %1] Failed to load compute shader: %2").arg(m_uniqueID).arg(error));
-						delete shader;
-					}
-					else 
-					{
-						ccLog::PrintDebug("Loaded compute shader ");
-						m_customComputeShader = shader;
-					}
-				}
-				else {
-					ccLog::PrintDebug("compute shader already loaded");
-				}
-			}
-			else {
-				ccLog::PrintDebug("Compute Shaders disabled");
-			}
-#endif
-
 			if (!m_customRenderingShader) {
 				// TODO(jakob): update this
 #if 1

@@ -3640,13 +3640,6 @@ void ccPointCloud::drawMeOnly_new(CC_DRAW_CONTEXT& context)
 
 				m_vboManager.vbos[k]->bind();
 
-				if (context.customComputeShader) {
-					ccLog::PrintDebug("Compute shader is present");
-				}
-				else {
-					ccLog::PrintDebug("No compute shader is set");
-				}
-
 				if (shader) {
 					// can this also be moved outside the loop?
 					shader->enableAttributeArray("Pos");

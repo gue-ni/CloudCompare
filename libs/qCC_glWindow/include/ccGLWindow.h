@@ -1194,8 +1194,6 @@ protected: //members
 	ccColorRampShader* m_colorRampShader;
 	// Custom rendering shader (OpenGL 3.3+)
 	ccShader* m_customRenderingShader = nullptr;
-	// Custom compute shader (OpengGL 4.3+)	
-	ccShader* m_customComputeShader = nullptr;
 
 	//! Active GL filter
 	ccGlFilter* m_activeGLFilter;
