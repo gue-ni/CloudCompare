@@ -970,6 +970,7 @@ bool ccGLWindow::initialize()
 				}
 			}
 
+#if 0
 			if (m_computeShadersEnabled) {
 				ccLog::PrintDebug("Compute Shaders enabled");
 
@@ -996,10 +997,15 @@ bool ccGLWindow::initialize()
 			else {
 				ccLog::PrintDebug("Compute Shaders disabled");
 			}
+#endif
 
 			if (!m_customRenderingShader) {
 				// TODO(jakob): update this
+#if 1
 				const QString shaderPath = QStringLiteral( "%1/2" ).arg( *s_shaderPath );
+#else
+				const QString shaderPath = QStringLiteral( "%1/PointCloud" ).arg( *s_shaderPath );
+#endif
 				ccShader* shader = new ccShader();
 				QString error;
 				if (!shader->fromFile(shaderPath, "shader", error))
@@ -1956,7 +1962,6 @@ void ccGLWindow::drawBackground(CC_DRAW_CONTEXT& CONTEXT, RenderingParams& rende
 
 void ccGLWindow::fullRenderingPass(CC_DRAW_CONTEXT& CONTEXT, RenderingParams& renderingParams)
 {
-	ccLog::PrintDebug("fullRenderingPass");
 	//visual traces
 	QStringList diagStrings;
 	if (m_showDebugTraces)

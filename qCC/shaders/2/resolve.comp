@@ -7,9 +7,9 @@ void main()
 {
     ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
 
-    vec4 value = vec4(0.0, 0.0, 0.0, 1.0);
+    vec4 value = vec4(0.0, 0.0, 0.5, 1.0);
     value.x = float(texelCoord.x) / (gl_NumWorkGroups.x);
     value.y = float(texelCoord.y) / (gl_NumWorkGroups.y);
 
     imageStore(framebuffer, texelCoord, value);
-};
+}

@@ -149,9 +149,13 @@ else()
 	install_ext( FILES ${CMAKE_CURRENT_SOURCE_DIR}/shaders/PointCloud/shader.frag ${CLOUDCOMPARE_DEST_FOLDER} /shaders/PointCloud )
 	install_ext( FILES ${CMAKE_CURRENT_SOURCE_DIR}/shaders/PointCloud/shader.vert ${CLOUDCOMPARE_DEST_FOLDER} /shaders/PointCloud )
 	install_ext( FILES ${CMAKE_CURRENT_SOURCE_DIR}/shaders/Compute/compute.comp ${CLOUDCOMPARE_DEST_FOLDER} /shaders/Compute )
+	install_ext( FILES ${CMAKE_CURRENT_SOURCE_DIR}/shaders/Compute/render.comp ${CLOUDCOMPARE_DEST_FOLDER} /shaders/Compute )
+	install_ext( FILES ${CMAKE_CURRENT_SOURCE_DIR}/shaders/Compute/resolve.comp ${CLOUDCOMPARE_DEST_FOLDER} /shaders/Compute )
 	install_ext( FILES ${CMAKE_CURRENT_SOURCE_DIR}/shaders/2/shader.frag ${CLOUDCOMPARE_DEST_FOLDER} /shaders/2 )
 	install_ext( FILES ${CMAKE_CURRENT_SOURCE_DIR}/shaders/2/shader.vert ${CLOUDCOMPARE_DEST_FOLDER} /shaders/2 )
 	install_ext( FILES ${CMAKE_CURRENT_SOURCE_DIR}/shaders/2/shader.comp ${CLOUDCOMPARE_DEST_FOLDER} /shaders/2 )
+	install_ext( FILES ${CMAKE_CURRENT_SOURCE_DIR}/shaders/2/render.comp ${CLOUDCOMPARE_DEST_FOLDER} /shaders/2 )
+	install_ext( FILES ${CMAKE_CURRENT_SOURCE_DIR}/shaders/2/resolve.comp ${CLOUDCOMPARE_DEST_FOLDER} /shaders/2 )
 endif()
 
 # Install plugins and shaders in the correct folder for each platform

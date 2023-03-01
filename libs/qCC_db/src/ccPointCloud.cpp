@@ -2625,7 +2625,7 @@ struct DisplayDesc : LODLevelDesc
 	LODIndexSet* indexMap;
 };
 
-void ccPointCloud::drawMeOnly_test(CC_DRAW_CONTEXT& context)
+void ccPointCloud::drawMeOnly_compute(CC_DRAW_CONTEXT& context)
 {
 	QOpenGLFunctions_4_3_Core* glFunc = context.glFunctions<QOpenGLFunctions_4_3_Core>();
 	assert(glFunc != nullptr);
@@ -2644,9 +2644,9 @@ void ccPointCloud::drawMeOnly_test(CC_DRAW_CONTEXT& context)
 	}
 #endif
 	
-	if (renderShader == 0)
+	if (resolveShader == 0)
 	{
-		std::string path = "shaders/2/shader.comp";
+		std::string path = "shaders/2/resolve.comp";
 		std::ifstream cShaderFile;
 		cShaderFile.open(path);
 		if (!cShaderFile.is_open())
@@ -2666,9 +2666,9 @@ void ccPointCloud::drawMeOnly_test(CC_DRAW_CONTEXT& context)
 		glFunc->glShaderSource(compute, 1, &cShaderCode, NULL);
 		glFunc->glCompileShader(compute);
 
-		renderShader = glFunc->glCreateProgram();
-		glFunc->glAttachShader(renderShader, compute);
-		glFunc->glLinkProgram(renderShader);
+		resolveShader = glFunc->glCreateProgram();
+		glFunc->glAttachShader(resolveShader, compute);
+		glFunc->glLinkProgram(resolveShader);
 		glFunc->glDeleteShader(compute);
 	}
 
@@ -2731,16 +2731,14 @@ void ccPointCloud::drawMeOnly_test(CC_DRAW_CONTEXT& context)
 			arrayBuf->setUsagePattern(QGLBuffer::StaticDraw);
 		}
 
-		ccShader* shader		= context.customRenderingShader; 
-		ccShader* computeShader = context.customComputeShader; 
+		glFunc->glActiveTexture(GL_TEXTURE0);
+		glFunc->glBindTexture(GL_TEXTURE_2D, texture_id);
 
-		if (shader && computeShader) {
+		ccShader* shader = context.customRenderingShader; 
 
-			glFunc->glUseProgram(renderShader);
+		if (shader) {
 
-			glFunc->glActiveTexture(GL_TEXTURE0);
-			glFunc->glBindTexture(GL_TEXTURE_2D, texture_id);
-
+			glFunc->glUseProgram(resolveShader);
 			glFunc->glDispatchCompute(texture_width, texture_width, 1);
 			glFunc->glMemoryBarrier(GL_ALL_BARRIER_BITS);
 
@@ -2748,8 +2746,6 @@ void ccPointCloud::drawMeOnly_test(CC_DRAW_CONTEXT& context)
 
 			shader->bind();
 			
-			//glFunc->glBindTexture(GL_TEXTURE_2D, texture_id);
-
 			shader->enableAttributeArray("Pos");
 			shader->setAttributeBuffer("Pos", GL_FLOAT, 0, 3, 5 * sizeof(GLfloat));
 
@@ -3688,7 +3684,7 @@ void ccPointCloud::drawMeOnly_new(CC_DRAW_CONTEXT& context)
 
 void ccPointCloud::drawMeOnly(CC_DRAW_CONTEXT& context)
 {
-	drawMeOnly_test(context);
+	drawMeOnly_compute(context);
 }
 
 void ccPointCloud::addColorRampInfo(CC_DRAW_CONTEXT& context)
