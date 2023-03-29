@@ -1,15 +1,65 @@
 #version 430 core
 
+#extension GL_ARB_gpu_shader_int64 : enable
+#extension GL_NV_shader_atomic_int64 : enable
+//#extension GL_NV_gpu_shader5 : enable
+
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
-layout(rgba32f, binding = 0) uniform image2D framebuffer;
+
+layout(rgba32f, binding = 0) uniform image2D Output;
+
+layout (std430, binding = 1) buffer framebuffer_data {
+	uint64_t ssboFramebuffer[];
+};
+
 
 void main()
 {
+#if 0
     ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
 
-    vec4 value = vec4(0.0, 0.0, 0.5, 1.0);
-    value.x = float(texelCoord.x) / (gl_NumWorkGroups.x);
-    value.y = float(texelCoord.y) / (gl_NumWorkGroups.y);
+    vec4 color = vec4(0.0, 0.0, 0.5, 1.0);
+    color.x = float(texelCoord.x) / (gl_NumWorkGroups.x);
+    color.y = float(texelCoord.y) / (gl_NumWorkGroups.y);
 
-    imageStore(framebuffer, texelCoord, value);
+    //imageStore(Output, texelCoord, uvec4(color * 255.0f));
+    imageStore(Output, texelCoord, color);
+#else
+    uvec2 id = gl_LocalInvocationID.xy + gl_WorkGroupSize.xy * gl_WorkGroupID.xy;
+    ivec2 imgSize = imageSize(Output);
+
+    if(id.x >= imgSize.x){
+      return;
+    }
+
+    uint pixelID = id.x + id.y * imgSize.x;
+
+    vec4 color;
+
+#if 1
+    // decode
+    uint64_t val64 = ssboFramebuffer[pixelID];
+
+    // the pixelID is probably wrong
+#if 1
+    uint ucol = uint(val64 & 0x00FFFFFFUL);
+#else
+	  uint ucol = 0xf6d42aU; // this works, though it does not give the correct color
+#endif
+
+    if(ucol == 0){
+      color = vec4(0, 1, 0, 1); // green
+    } else {
+      color = unpackUnorm4x8(ucol); 
+      //color = vec4(0, 0, 1, 1); // blue
+    }
+#else
+  color = vec4(1, 0, 0, 1); // red
+#endif
+
+    imageStore(Output, ivec2(id), color);
+
+    // reset
+	  //ssboFramebuffer[pixelID] = 0xffffffffff5271ffUL;
+#endif
 }

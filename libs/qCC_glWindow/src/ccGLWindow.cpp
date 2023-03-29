@@ -880,13 +880,18 @@ bool ccGLWindow::initialize()
 				ccLog::Warning("[3D View %i] GL_ARB_compatibility available", m_uniqueID);
 		}
 
-		m_computeShadersEnabled = context()->hasExtension(QByteArrayLiteral("GL_ARB_compute_shader"));
+		m_computeShadersEnabled = context()->hasExtension(QByteArrayLiteral("GL_ARB_compute_shader"))
+						&& context()->hasExtension(QByteArrayLiteral("GL_ARB_shader_storage_buffer_object"));
+						//&& context()->hasExtension(QByteArrayLiteral("GL_ARB_gpu_shader_int64"));
+						//&& context()->hasExtension(QByteArrayLiteral("GL_NV_shader_atomic_int64"));
+						//&& context()->hasExtension(QByteArrayLiteral("GL_NV_gpu_shader5"));
+
+
 
 		if (!m_computeShadersEnabled)
 		{
 			if (!m_silentInitialization)
 				ccLog::Warning("[3D View %i] Compute Shaders unavailable", m_uniqueID);
-
 		}
 		else
 		{
@@ -973,8 +978,10 @@ bool ccGLWindow::initialize()
 			if (!m_customRenderingShader) {
 				// TODO(jakob): update this
 #if 1
+				// render to screen quad
 				const QString shaderPath = QStringLiteral( "%1/2" ).arg( *s_shaderPath );
 #else
+				// render point cloud
 				const QString shaderPath = QStringLiteral( "%1/PointCloud" ).arg( *s_shaderPath );
 #endif
 				ccShader* shader = new ccShader();
@@ -982,6 +989,7 @@ bool ccGLWindow::initialize()
 				if (!shader->fromFile(shaderPath, "shader", error))
 				{
 					ccLog::Warning(QString("[3D View %1] Failed to load custom Rendering Shader").arg(m_uniqueID));
+					m_customRenderingShader = nullptr;
 				}
 				else {
 					m_customRenderingShader = shader;

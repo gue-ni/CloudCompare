@@ -1,45 +1,64 @@
-#version 450
+#version 430 core
 
 #extension GL_ARB_gpu_shader_int64 : enable
 #extension GL_NV_shader_atomic_int64 : enable
+//#extension GL_NV_gpu_shader5 : enable
 
-layout(local_size_x = 128, local_size_y = 1) in;
+layout(local_size_x = 128, local_size_y = 1, local_size_z = 1) in;
 
-struct Vertex {
-	vec3 pos;
-}
+struct Vertex{
+	float x;
+	float y;
+	float z;
+};
 
 layout (std430, binding = 0) buffer point_data {
 	Vertex vertices[];
 };
 
 layout (std430, binding = 1) buffer framebuffer_data {
-	uint64_t framebuffer[];
+	uint64_t ssboFramebuffer[];
 };
 
+uniform mat4 ModelView;
+uniform mat4 Projection;
+uniform ivec2 ImageSize;
 
-uniform mat4 uModelView;
-uniform mat4 uProjection;
 
 void main()
 {
-	vec4 color = vec4(1, 0, 0, 1);
+	mat4 Transform = ModelView * Projection;
 
-	uint id = gl_GlobalInvocationID.x;
-	Vertex v = vertices[id];
+	// id in local_size_x
+	uint globalID = gl_GlobalInvocationID.x;
+	Vertex v = vertices[globalID];
 
-	vec4 pos = uProjection * uModelView * vec4(aPos, 1.0);
-	pos.xyz = pos.xyz / pos.x;
+	vec4 pos = Transform * vec4(v.x, v.y, v.z, 1.0);
+	pos.xyz /= pos.w;
 
 	if(pos.w <= 0.0 || pos.x < -1.0 || pos.x > 1.0 || pos.y < -1.0 || pos.y > 1.0){
 		return;
 	}
 
-	ivec2 pixelCoords = ivec2((pos.xy * 0.5 + 0.5) * uImageSize);
-	int pixelID = pixelCoords.x + pixelCoords.y * uImageSize.x;
+#if 0
+	ivec2 pixelCoords = ivec2((pos.xy * 0.5 + 0.5) * ImageSize);
+	int pixelID = pixelCoords.y * ImageSize.x + pixelCoords.x;
+#else
+  uvec2 id = gl_LocalInvocationID.xy + gl_WorkGroupSize.xy * gl_WorkGroupID.xy;
 
-	int64_t depth = floatBitsToInt(pos.w);
-	int64_t val64 = (depth << 24) | int64_t(color);
+  if(id.x >= ImageSize.x){
+    return;
+  }
 
-	atomicMin(framebuffer[pixelID], val64);
-};
+  uint pixelID = id.x + id.y * ImageSize.x;
+#endif
+
+
+	uint color = 0xf6d42aU;
+
+	uint64_t depth = floatBitsToInt(pos.w);
+	uint64_t val64 = (depth << 24) | uint64_t(color);
+
+	ssboFramebuffer[pixelID] = val64;
+	//atomicMin(ssboFramebuffer[pixelID], val64);
+}

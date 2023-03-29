@@ -746,10 +746,10 @@ public: //other methods
 
 
 	// TODO(jakob)
-	QGLBuffer *arrayBuf = nullptr; 
+	QGLBuffer *screenQuad = nullptr; 
 	QOpenGLTexture *texture = nullptr;	
 
-	uint8_t* framebuffer;
+	uint8_t* framebuffer = nullptr;
 	GLuint texture_id = 0;
 	GLuint renderShader = 0;
 	GLuint resolveShader = 0;
